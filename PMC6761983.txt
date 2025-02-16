@@ -1,0 +1,130 @@
+
+==== Front
+BioinformaticsBioinformaticsbioinformaticsBioinformatics1367-48031367-4811Oxford University Press 10.1093/bioinformatics/btz141btz141Applications NotesGenome AnalysisDestin: toolkit for single-cell analysis of chromatin accessibility Urrutia Eugene 1Chen Li 2Zhou Haibo 1http://orcid.org/0000-0001-6905-6377Jiang Yuchao 1341 
+Department of Biostatistics, Gillings School of Global Public Health, University of North Carolina, Chapel Hill, NC, USA2 
+Department of Health Outcomes Research and Policy, Harrison School of Pharmacy, Auburn University, Auburn, AL, USA3 
+Department of Genetics, School of Medicine, University of North Carolina, Chapel Hill, NC, USA4 
+Lineberger Comprehensive Cancer Center, University of North Carolina, Chapel Hill, NC, USABerger Bonnie Associate EditorTo whom correspondence should be addressed. E-mail: yuchaoj@email.unc.edu01 10 2019 01 3 2019 01 3 2019 35 19 3818 3820 04 11 2018 10 2 2019 25 2 2019 © The Author(s) 2019. Published by Oxford University Press.2019This is an Open Access article distributed under the terms of the Creative Commons Attribution License (http://creativecommons.org/licenses/by/4.0/), which permits unrestricted reuse, distribution, and reproduction in any medium, provided the original work is properly cited.Abstract
+Summary
+Single-cell assay of transposase-accessible chromatin followed by sequencing (scATAC-seq) is an emerging new technology for the study of gene regulation with single-cell resolution. The data from scATAC-seq are unique—sparse, binary and highly variable even within the same cell type. As such, neither methods developed for bulk ATAC-seq nor single-cell RNA-seq data are appropriate. Here, we present Destin, a bioinformatic and statistical framework for comprehensive scATAC-seq data analysis. Destin performs cell-type clustering via weighted principle component analysis, weighting accessible chromatin regions by existing genomic annotations and publicly available regulomic datasets. The weights and additional tuning parameters are determined via model-based likelihood. We evaluated the performance of Destin using downsampled bulk ATAC-seq data of purified samples and scATAC-seq data from seven diverse experiments. Compared to existing methods, Destin was shown to outperform across all datasets and platforms. For demonstration, we further applied Destin to 2088 adult mouse forebrain cells and identified cell-type-specific association of previously reported schizophrenia GWAS loci.
+
+Availability and implementation
+Destin toolkit is freely available as an R package at https://github.com/urrutiag/destin.
+
+Supplementary information
+
+Supplementary data are available at Bioinformatics online.
+
+National Institutes of Health10.13039/100000002NIH10.13039/100000002P01 CA142538R35 GM118102UNC Lineberger Comprehensive Cancer Center10.13039/1000086152017T109UNC Computational Medicine ProgramNIH10.13039/100000002T32 ES007018
+==== Body
+1 Introduction
+Single-cell assay of transposase-accessible chromatin followed by sequencing (scATAC-seq) is an emerging new technology for the study of gene regulation with single-cell resolution. Unlike conventional regulomics technologies, scATAC-seq measures chromatin accessibility within each individual cell, which circumvents the averaging artifacts associated with traditional bulk population data, yielding new insights into epigenetic regulation at the cellular level. Technologically, Buenrostro et al. (2015) adapted the bulk ATAC-seq technology to single cells, utilizing microfluidic device to physically isolate single cells. Cusanovich et al. (2015) adopted a two-step ‘split-and-pool’ strategy, where cells undergo several rounds of barcoding procedures to be uniquely labeled. Recently, Preissl et al. (2018) developed single-nucleus ATAC-seq (snATAC-seq), adapting the two-step combinatorial indexing strategy to frozen tissues. The Chromium Single Cell ATAC Solution by the 10X Genomics (https://www.10xgenomics.com/solutions/single-cell-atac) can further profile chromatin accessibility across 500–10 000 nuclei in parallel. Refer to Supplementary Table S1 for summary statistics of existing platforms and technologies.
+
+The data from scATAC-seq are unique—sparse, binary, noisy with biases and artifacts, and highly variable even within cell types. Supplementary Figure S1 shows a snapshot of both single-cell and bulk-tissue chromatin accessibility within a 800 kb region from chromosome 1, using human monocyte cells and purified bulk samples (Corces et al., 2016), respectively. scATAC-seq data are sparse and noisy, and the signals share low similarity across cells. On the contrary, bulk signals are highly conserved across the five purified samples. Total depth of coverage in single cells is also greatly reduced, several orders of magnitude lower than bulk. In addition, since most of the genome has only two copies in a cell and the transposase can cleave and add adaptors only once per copy, for each open chromatin region, at most two sequenceable fragments can be generated and equivalently at most two reads per locus can be obtained after removing PCR duplicates. As such, scATAC-seq data are also highly binary, indicating an open/closed status. Because of the aforementioned uniqueness of scATAC-seq data, neither methods developed for bulk ATAC-seq nor single-cell RNA-seq (scRNA-seq) can be directly applied.
+
+A major advantage of single-cell omics technology is the identification of cellular subpopulations from heterogeneous populations of cells. The structure of a complex tissue is tightly linked with its function, and thus determining the identity and frequency of cell types is crucial and allows for study of disease association at much finer resolution. Several cell-type clustering methods specific to scATAC-seq have been proposed. ScAsAT (Baker et al., 2018) first performs dimension reduction on cell-by-cell Jaccard distance matrix, followed by t-SNE (van der Maaten and Hinton, 2008) and k-medoids for clustering. scABC (Zamanighomi et al., 2018) begins by clustering cell types using weighted k-medoids, up-weighting cells with higher sequencing depth. To address the sparsity and noise observed in scATAC-seq and to reduce dimension, SCRAT (Ji et al., 2017) and chromVAR (Schep et al., 2017) aggregate scATAC-seq read counts across biological features such as transcription factor binding motifs, DNase I hypersensitivity sites (DHSs), genes or gene sets of interest. This is followed by a further dimension reduction step and clustering.
+
+Here, we propose Destin (Detection of cell-type specific difference in chromatin accessibility), a bioinformatic and statistical framework for comprehensive scATAC-seq data analysis. For cell-type clustering, instead of directly aggregating peaks based on existing genomic annotations, Destin adopts weighted principal component analysis (PCA), with peak-specific weights calculated based on the distances to transcription start sites (TSSs) as well as the relative frequency of chromatin accessibility peaks based on reference regulomic data from the ENCODE Project (Consortium et al., 2012). The weights, the hyperparameters, as well as the number of principle components, are cast as tuning parameters and are determined based on the likelihood calculated from a post-clustering multinomial model. The optimal number of clusters is determined using an automated elbow method. Destin is evaluated on scATAC-seq data of 5800 cells from seven experiments and is benchmarked against existing methods. We show that Destin outperforms the other methods across different datasets and platforms. As a proof of concept, we demonstrate Destin on a scATAC-seq dataset of 2088 adult mouse forebrain cells and identify cell-type-specific association of previously reported GWAS loci for schizophrenia.
+
+2 Materials and methods
+Destin begins with a bioinformatic pipeline to preprocess raw sequencing files and follows with statistical analysis for cell-type clustering and cell type enrichment of previously reported GWAS loci. Specifically, the bioinformatic pipeline includes demultiplexing (for platforms with cellular barcodes), trimming adaptors, mapping reads, filtering blacklist regions, calling peaks in pseudo-bulk samples as aggregates of single cells. After a further quality control procedure, this results in a peak-by-cell chromatin accessibility matrix. Refer to Supplementary Materials for details on bioinformatic analysis. To optimally cluster cell types, Destin utilizes both existing genomic annotations and publicly available regulomic datasets as reference to prioritize peaks.
+
+First, we upweight distal regulatory elements (e.g. enhancers) relative to proximal elements (e.g. promoters). Corces et al. (2016) showed that distal regulatory elements provide sharper ability for clustering than do proximal elements, and thus, for analysis, focused on accessible chromatin regions 1 kb upstream from the TSSs. Similarly, Preissl et al. (2018) focused on accessible chromatin regions outside a 2 kb window from the TSSs. However, Corces et al. (2016) also showed that there is predictive value in the promoter region and meanwhile, Zamanighomi et al. (2018) further identified cluster-specific peaks within promoter regions that lead to differential expression. As such, Destin retains all peaks in analysis but opts for a binary weighting scheme: higher weights for distal regulatory elements and lower weights for proximal elements, where peaks are categorized as ‘distal’ or ‘proximal’ based on a 3 kb window overlapping the TSSs.
+
+Next, we define a second set of peak-specific weights based on our hypothesis that accessible chromatin regions shared among few cells types are more informative for clustering compared to accessible chromatin regions shared across many cell types. Therefore, we created a reference frequency map for chromatin accessibility peaks using DHS data of 50–100 cell lines/types from the ENCODE Project (Consortium et al., 2012), depending on species. The reference DHS frequency was created by calculating the proportion of reference cell types or tissue types containing a DHS peak in each 500 bp genomic region. Destin applies a continuous weighting scheme for reference DHS frequency, where higher weights are assigned to accessible chromatin regions with lower reference DHS frequencies.
+
+The two weights for each region/peak are then multiplied to generate a final weight as input for the weighted PCA. Weighted PCA performs dimension reduction in this ultra-high dimensional setting, where binary matrix factorization cannot be run. This is followed by k-means for clustering. The values of weights, as well as the number of PCs, are optimized via grid search to maximize the post-clustering likelihood based on a multinomial model (Supplementary Figure S2–S5). The number of clusters is determined using the ‘elbow’ method based on the multinomial likelihood (Supplementary Figure S6–S7). Lastly, a post-clustering step is adopted to reassign cluster memberships for cells. Refer to Supplementary Materials and Supplementary Algorithm S1 for more details on the proposed method.
+
+3 Results
+We benchmarked Destin against three existing scATAC-seq methods: scABC, ScAsAT and chromVAR. The online GUI by SCRAT takes bam files as input and cannot handle datasets with large number of cells. We began our benchmarks by downsampling bulk ATAC-seq data of purified bulk samples from Corces et al. (2016). We varied the number of cell types (2, 4, 6 or 8) and downsampled 50 cells per cell type. Median read depth per cell was also varied, ranging from 3000 (for combinatorial indexing and 10X Genomics) to 70 000 (for Fluidigm C1). Our results show that performance for all methods increased with number of reads and that Destin outperformed all other methods in almost every scenario, with mean cluster purity shown in Figure 1A. Next, we benchmarked Destin against the other methods using seven publicly available scATAC-seq datasets (Supplementary Table S2). Destin performed as well as or better than all other methods in terms of cluster purity across all datasets (Fig. 1B), including cluster purity at nearly 100% in five out of seven datasets. For computational efficiency, Destin and chromVAR run significantly faster than scABC and ScAsAT across all datasets (Supplementary Fig. S8); for computational capacity, Destin was successfully applied to the 10X Genomics scATAC-seq data of 5k peripheral blood mononuclear cells (see vignettes on GitHub for more details).
+
+
+Fig. 1. Benchmark results against existing methods via downsampling and empirical data analysis. (A) Purified bulk ATAC-seq data from Corces et al. (2016) were downsampled with different numbers of cell types and different median reads per cell. (B) Cluster results across seven scATAC-seq datasets. chromVAR and scABC cannot be applied to the three datasets from Cusanovich et al. (2015) due to unavailability of required input as bam files
+
+We further applied Destin to snATAC-seq data of 2088 cells from adult mouse forebrain (Preissl et al., 2018). Destin’s cell-type clustering results, by its default, differed from the results by the original publication—Destin clustered together both the three excitatory neuron subtypes and the related microglia and astrocytes, which we refer to as neuroglia (Supplementary Fig. S9A). Notably, with increased number of cluster, Destin was able to resolve the microglia and astrocytes (Supplementary Fig. S9B).
+
+A key application of single-cell omics technology is to identify specific cell types that are associated with disease. Compared to scRNA-seq, scATAC-seq extends the investigation to noncoding regions including, e.g. promoters and enhancers. In a similar fashion to Skene et al. (2018), we determined ‘cell-type specificity’ for each gene, based on the gene annotations of accessible chromatin regions and the clustering results by Destin. The cell-type specificity score was then tested for association with GWAS P-values mapped to each gene from three psychiatric studies—schizophrenia (Ripke et al., 2014), major depressive disorder (Wray et al., 2018) and attention deficit hyperactivity disorder (Demontis et al., 2019). We discovered significant association between the schizophrenia GWAS loci and inhibitory neuron 1 by two independent methods MAGMA (de Leeuw et al., 2015) and ECWC (Skene and Grant, 2016) (Table 1). Though an interesting observation whose underlying biological mechanism requires further follow-ups, here by mapping disease risk variants to cell-type-specific regulatory regions, we obtained proof-of-concept identification of possible pathogenic cell types underlying schizophrenia.
+
+Table 1. Cell-type enrichment for previously reported GWAS loci
+
+Cell type	MAGMA P-value	ECWC P-value	
+SCZ	MDD	ADHD	SCZ	
+Excitatory neuron	0.466	0.164	1	0.255	
+Inhibitory neuron 1	0.009*	0.151	0.774	0.035*	
+Inhibitory neuron 2	0.434	0.204	1	1	
+Neuroglia	1	1	1	1	
+Oligodendrocyte	1	1	1	1	
+
+Note: Bonferroni corrected P-values are calculated by MAGMA and ECWC for association of mouse forebrain cell types with previously reported GWAS loci for schizophrenia (SCZ), major depressive disorder (MDD) and attention deficit hyperactivity disorder (ADHD). Asterisks (*) mark significant associations.
+
+Funding
+This work was supported by the National Institutes of Health (NIH) [P01 CA142538, R35 GM118102 to Y.J.], and a developmental award from the UNC Lineberger Comprehensive Cancer Center [2017T109 to Y.J.] a pilot award from the UNC Computational Medicine Program and the NIH Ruth L. Kirschstein NSRA [T32 ES007018 to E.U.].
+
+
+Conflict of Interest: none declared.
+
+Supplementary Material
+btz141_Supplementary_Data Click here for additional data file.
+==== Refs
+References
+
+Baker S.M.  
+et al (2018 ) 
+Classifying cells with ScAsAT, a single-cell ATAC-seq analysis tool . Nucleic Acids Res ., 47 , e10 .
+
+Buenrostro J.D.  
+et al (2015 ) 
+Single-cell chromatin accessibility reveals principles of regulatory variation . Nature , 523 , 486. 26083756 
+
+Corces M.R.  
+et al (2016 ) 
+Lineage-specific and single-cell chromatin accessibility charts human hematopoiesis and leukemia evolution . Nat. Genet ., 48 , 1193. 27526324 
+
+Cusanovich D.A.  
+et al (2015 ) 
+Multiplex single-cell profiling of chromatin accessibility by combinatorial cellular indexing . Science , 348 , 910 –914 .25953818 
+
+de Leeuw C.A.  
+et al (2015 ) 
+Magma: generalized gene-set analysis of GWAS data . PLoS Comput. Biol ., 11 , e1004219. 25885710 
+
+Demontis D.  
+et al (2019 ) 
+Discovery of the first genome-wide significant risk loci for ADHD . Nat. Genet. , 51 , 63 –75 .30478444 
+
+ENCODE Project Consortium.  (2012 ) 
+An integrated encyclopedia of DNA elements in the human genome . Nature , 489 , 57 .22955616 
+
+Ji Z.  
+et al (2017 ) 
+Single-cell regulome data analysis by SCRAT . Bioinformatics , 33 , 2930 –2932 .28505247 
+
+Preissl S.  
+et al (2018 ) Single-nucleus analysis of accessible chromatin in developing mouse forebrain reveals cell-type-specific transcriptional regulation. Nat. Neurosci. , 21 , 432 –439 .29434377 
+
+Ripke S.  
+et al (2014 ) 
+Biological insights from 108 schizophrenia-associated genetic loci . Nature , 511 , 421. 25056061 
+
+Schep A.N.  
+et al (2017 ) 
+chromVAR: inferring transcription-factor-associated accessibility from single-cell epigenomic data . Nat. Methods , 14 , 975. 28825706 
+
+Skene N.G.  
+et al (2018 ) 
+Genetic identification of brain cell types underlying schizophrenia . Nat. Genet ., 50 , 825 –833 .29785013 
+
+Skene N.G. , Grant S.G.   (2016 ) 
+Identification of vulnerable cell types in major brain disorders using single cell transcriptomes and expression weighted cell type enrichment . Front. Neurosci ., 10 , 16 .26858593 
+
+van der Maaten L. , Hinton G.   (2008 ) 
+Visualizing data using t-SNE . J. Mach. Learn. Res ., 9 , 2579 –2605 .
+
+Wray N.R.  
+et al (2018 ) 
+Genome-wide association analyses identify 44 risk variants and refine the genetic architecture of major depression . Nat. Genet ., 50 , 668 .29700475 
+
+Zamanighomi M.  
+et al (2018 ) 
+Unsupervised clustering and epigenetic classification of single cells . Nat. Commun ., 9 , 2410 .29925875
+
