@@ -1,0 +1,295 @@
+
+==== Front
+BMC BioinformaticsBMC BioinformaticsBMC Bioinformatics1471-2105BioMed Central London 297810.1186/s12859-019-2978-zMethodology ArticleStochastic Lanczos estimation of genomic variance components for linear mixed-effects models http://orcid.org/0000-0002-6293-2968Border Richard richard.border@colorado.edu 12Becker Stephen stephen.becker@colorado.edu 31 0000000096214564grid.266190.aInstitute for Behavioral Genetics, University of Colorado Boulder, Boulder, 80309 CO USA 2 0000000096214564grid.266190.aDepartment of Psychology and Neuroscience, University of Colorado Boulder, Boulder, 80309 CO USA 3 0000000096214564grid.266190.aDepartment of Applied Mathematics, University of Colorado Boulder, Boulder, 80309 CO USA 30 7 2019 30 7 2019 2019 20 41115 4 2019 30 6 2019 © The Author(s) 2019Open Access This article is distributed under the terms of the Creative Commons Attribution 4.0 International License (http://creativecommons.org/licenses/by/4.0/), which permits unrestricted use, distribution, and reproduction in any medium, provided you give appropriate credit to the original author(s) and the source, provide a link to the Creative Commons license, and indicate if changes were made. The Creative Commons Public Domain Dedication waiver (http://creativecommons.org/publicdomain/zero/1.0/) applies to the data made available in this article, unless otherwise stated.Background
+Linear mixed-effects models (LMM) are a leading method in conducting genome-wide association studies (GWAS) but require residual maximum likelihood (REML) estimation of variance components, which is computationally demanding. Previous work has reduced the computational burden of variance component estimation by replacing direct matrix operations with iterative and stochastic methods and by employing loose tolerances to limit the number of iterations in the REML optimization procedure. Here, we introduce two novel algorithms, stochastic Lanczos derivative-free REML (SLDF_REML) and Lanczos first-order Monte Carlo REML (L_FOMC_REML), that exploit problem structure via the principle of Krylov subspace shift-invariance to speed computation beyond existing methods. Both novel algorithms only require a single round of computation involving iterative matrix operations, after which their respective objectives can be repeatedly evaluated using vector operations. Further, in contrast to existing stochastic methods, SLDF_REML can exploit precomputed genomic relatedness matrices (GRMs), when available, to further speed computation.
+
+Results
+Results of numerical experiments are congruent with theory and demonstrate that interpreted-language implementations of both algorithms match or exceed existing compiled-language software packages in speed, accuracy, and flexibility.
+
+Conclusions
+Both the SLDF_REML and L_FOMC_REML algorithms outperform existing methods for REML estimation of variance components for LMM and are suitable for incorporation into existing GWAS LMM software implementations.
+
+Electronic supplementary material
+The online version of this article (10.1186/s12859-019-2978-z) contains supplementary material, which is available to authorized users.
+
+Keywords
+GWASLinear mixed-effects modelsVariance componentsREMLConjugate gradientsStochastic trace estimationStochastic Lanczos quadraturehttp://dx.doi.org/10.13039/100000025National Institute of Mental HealthT32 MH01688http://dx.doi.org/10.13039/100000001National Science FoundationDMS-1819251issue-copyright-statement© The Author(s) 2019
+==== Body
+Background
+Linear mixed-effects modeling (LMM) is a leading methodology employed in genome-wide association studies (GWAS) of complex traits in humans, offering the dual benefits of controlling for population stratification while permitting the inclusion of data from related individuals [1]. However, the implementation of LMM comes at the cost of increased computational burden relative to ordinary least-squares regression, particularly in performing residual maximum likelihood (REML) estimation of genomic variance components. Conventional REML algorithms require multiple On3 or Omn2 matrix operations, where m and n are the numbers of markers and individuals, respectively, rendering them infeasible for large biobank scale data sets. Further, common numerical methods for REML estimation rely on sparse matrix methods suitable for traditional LMM applications (e.g., pedigree data or experiments with repeated measures [2]) that are inapplicable to genomics variance components models since these models involve dense relatedness matrices. As a result, the problem of increasing the computational efficiency of REML estimation of genomic variance components has generated considerable research activity [3–8].
+
+In the case of the standard two variance component model (1), the estimation of which is the focus of the current research, previous efforts toward increasing computational efficiency fit into two primary categories: 1., reducing the number of cubic time complexity matrix operations needed to achieve convergence; and 2., substituting stochastic and iterative matrix operations for deterministic, direct methods to obtain procedures with quadratic time complexity. The first approach is embodied by the methods implemented in the FaST-LMM and GEMMA packages [3, 5, 6], which take advantage of the fact that the genetic relatedness matrix (GRM) and identity matrix comprising the covariance structure are simultaneously diagonalizable. As a result, after performing a single spectral decomposition of the GRM and a small number of matrix-vector multiplications, the REML criterion (3) and its gradient and Hessian can be repeatedly evaluated using only vector operations. The second approach is exemplified by the popular BOLT-LMM software [7, 8], which avoids all cubic operations by solving linear systems via the method of conjugate gradients (CG) and employing stochastic trace estimators in place of deterministic computations.
+
+In the current research, we propose two algorithms, stochastic Lanczos derivative-free residual maximum likelihood (SLDF_REML; Algorithm 3) and Lanczos first-order Monte Carlo residual maximum likelihood (L_FOMC_REML; Algorithm 4), that combine features of both approaches (Fig. 1). Here, we translate the simultaneous diagonalizability of the heritable and non-heritable components of the covariance structure to stochastic and iterative methods via the principle of Krylov subspace shift-invariance. As a result, we only need to compute the costliest portions of the objective function once (via stochastic/iterative methods), computing all subsequent iterations of the REML optimization problem only using vector operations. We develop the theory underlying these methods and demonstrate their performance relative to previous methods via numerical experiment.
+Fig. 1 Time complexity analogies with respect to existing and proposed methods. Heuristically, the novel algorithms (bottom right) are to the stochastic, iterative algorithm implemented in the BOLT-LMM software [7, 8] (bottom left) as the direct methods exploiting the shifted structure of the two component genomic variance component model (1) (e.g., FaST-LMM and GEMMA [3, 5]; top right) are to standard direct methods (top left). For simplicity, we assume here that the number of markers is equal to the number of observations and omit low-order terms related to the spectral conditioning of the covariance structure and the number of random vectors generated by the stochastic methods; further details are provided in Table 1. neval denotes the number of objective function evaluations needed to achieve convergence
+
+
+Table 1 Time complexity of stochastic algorithms
+
+Method	Overhead	Objective function evaluation	
+SLDF_REMLwith precomputed GRMwith genotype matrix	On2·(nrand+c)·nκ	O(n·c·nκ)	
+	O(2m·n·(nrand+c)·nκ)	O(n·c·nκ)	
+L_FOMC_REML	O(4m·n·nrand·nκ)	O(m·n·nrand)	
+BOLT_LMM	On·c2+m·c	O(4m·n·nrand·nκ)	
+n denotes the number of individuals, m the number of markers, and c the number of covariates. nrand indicates the number of random probing vectors and is fixed at 15 in all numerical experiments. nκ reflects the number of conjugate gradient iterations required to achieve convergence at a specified tolerance and can be bounded in terms of the spectral condition number of H0. As noted in [8], implicit preconditioning of H0 can be achieved by including the first few right singular vectors of the genotype matrix (or eigenvectors of the GRM) as covariates
+
+
+
+Results
+Across 20 replications per condition for random subsamples of n=16,000 to 256,000 unrelated European-ancestry individuals, both SLDF_REML and L_FOMC_REML produced heritability estimates for height consistent with those generated by the GCTA software package (Figs. 4 and 5). For large samples, the novel algorithms achieved greater accuracy than either version of BOLT-LMM (e.g., for n=250,000, mean-squared error was 1.74 ×10−6 for BOLT-LMM v2.3.2 versus 1.24 ×10−7 for L_FOMC_REML). Particularly, the time required per additional iteration after initial overhead computations was low for the novel algorithms (e.g., t¯=20.07 min for BOLT-LMM v2.3.2 versus 2.06 min for L_FOMC_REML; Table 2), enabling increased precision at minor cost. With respect to total timings, SLDF_REML dramatically outperformed all other methods when the precomputed GRM was available (Table 2 and Fig. 3), which we expect whenever the number of markers exceeds the sample size. Examining methods taking genotype matrices as inputs, SLDF_REML and L_FOMC_REML performed similarly, whereas BOLT-LMM v2.3.2 converged more quickly than either in smaller samples (Fig. 3), though the differences for n =256,000 were relatively minor (e.g., t¯=91.09 min for BOLT-LMM v2.3.2 versus 102.21 min for L_FOMC_REML; Table 2). The older version of BOLT-LMM, v2.1, performed significantly more slowly than any of the other implementations examined (e.g., average wall clock time was 177.95 min at n =256,000), demonstrating the importance of implementation optimization.
+Fig. 2 Overhead versus iterative optimization procedure timing results. Trimmed mean wall clock time for overhead computations and iterative REML optimization procedures across twenty replications per condition on the log10 scale (a) and natural scale (b). Error bars reflect per condition standard errors and lines connect per condition means
+
+
+Fig. 3 Timing results. Trimmed mean wall clock time across twenty replications for per condition on the log10 scale (a) and natural scale (b). Error bars reflect per condition standard errors and lines connect per condition trimmed means
+
+
+Fig. 4 Accuracy results. Comparison of heritability estimates for height generated by BOLT-LMM versions 2.1 and 2.3.2, SLDF_REML, and L_FOMC_REML versus those generated by the deterministic algorithm implemented in the GCTA software package ∗ [4], for varying sub-samples of 16,000 to 256,000 unrelated European-ancestry UK Biobank participants. Data are comprised of twenty independent replications per condition. Red dashed lines indicate standard errors of GCTA estimate. Points represent individual observations whereas boxes indicate the 95% confidence intervals for the trimmed mean estimate after a Bonferroni correction for 25 comparisons. The bias evidenced by the BOLT-LMM estimators is likely due to the combination of performing a small number of secant iterations with fixed start values and loose tolerances for determining convergence. ∗For n=256,000, memory requirements prohibited the use of GCTA, so we instead averaged ten estimates generated by the high-accuracy stochastic estimator implemented in BOLT-REML [31] (standard errors were 6.32e-5 and 2.45e-7 for the mean REML heritability estimate and its standard error, respectively)
+
+
+Fig. 5 Numerical experiments: accuracy versus time. Average absolute error on the log10 scale with respect to the GCTA estimate ∗ versus trimmed mean wall clock time across twenty replications per condition. Error bars reflect per condition standard errors and lines connect per condition trimmed means. ∗For n=256,000, memory requirements prohibited the use of GCTA, so we instead averaged ten estimates generated by the high-accuracy stochastic estimator implemented in BOLT-REML v2.3.2 [31] (standard errors were 6.32e-5 and 2.45e-7 for the mean heritability and its standard error, respectively)
+
+
+Table 2 Overhead and per objective function evaluation timings of stochastic algorithms for n=256,000
+
+Method		Overhead	Per evaluation	Evaluation count	Total	
+BOLT-LMM v2.1		34.63	35.83	4	177.95	
+BOLT-LMM v2.3.2		10.82	20.07	4	91.09	
+L_FOMC_REML		89.87	2.06	6	102.21	
+SLDF_REML {	with genotype matrix	90.22	1.06	9	99.73	
+	with precomputed GRM	28.95	1.07	9	38.60	
+Data reflect trimmed mean wall clock time in minutes over 20 iterations per condition
+
+
+
+As the computations needed to compute the Lanczos decompositions in L_FOMC_REML and BOLT-LMM v2.3.2 are equivalent in time and memory complexity, we expect that an optimized compiled-language implementation of L_FOMC_REML would reduce the overhead computation time by a significant linear factor (≈3 for n =256,000, comparing the sum of the overhead time and single objective function evaluation time for BOLT-LMM v2.3.2 to its total running time; Table 2). Consistent with theory, the wall clock times per objective function evaluation for the novel algorithms were trivial given the Lanczos decompositions (e.g., for n =256,000, t¯ = 2.06 versus 20.07 min for L_FOMC_REML and BOLT-LMM v2.3.2, respectively; Table 2 and Fig. 2).
+
+Discussion
+We have proposed stochastic algorithms for estimating the two variance component model (1), both of which theoretically offer substantial time savings relative to existing methods. Our methods capitalize on the principle of Krylov subspace shift invariance to reduce the number of steps involving On2 or O(mn) computations to one, whereas existing methods perform equivalent computations at each iteration of the REML optimization procedure. For large samples, when taking genotype matrices as inputs, our interpreted-language implementations of L_FOMC_REML and SLDF_REML [9] produced more accurate variance component estimates than the highly-optimized, compiled BOLT-LMM implementations, while taking similar amounts of time. Thus, we expect comparably-optimized implementations of the novel algorithms to compute high accuracy REML estimates in close to the time required by BOLT-LMM v2.3.2 for a single objective function evaluation. Further, in contrast to the BOLT_LMM algorithm, which requires the genotype matrix, SLDF_REML can exploit precomputed GRMs to reduce operation count by an O(2m/n) factor (Table 1), which yields dramatic time savings when the number of markers greatly exceeds the number of individuals (Fig. 3). While GRM precomputation is itself Omn2, it can be effectively and asynchronously parallelized across multiple compute nodes, substantially mitigating computational burden (though we note that serial input/output constraints can interfere with efficient parallelization). However, as the L_FOMC_REML algorithm involves the computation of BLUPs of SNP effects, L_FOMC_REML is preferable to SLDF_REML when BLUP estimates are desired for prediction (as in [10]).
+
+There are several limitations to the proposed approaches. First, SLDF_REML, which benefits from the ability to take GRMs as input, depends linearly on the number of included covariates, which might grow prohibitive in samples spanning numerous genotyping batches and ascertainment locations. However, as in BOLT_LMM, L_FOMC_REML requires O(mn) matrix multiplications for BLUP computation at each step of the REML optimization procedure, whereas SLDF_REML requires only vector operations. Thus, though the options provided by the two novel algorithms increase researchers’ flexibility overall, the choice of whether to employ SLDF_REML versus L_FOMC_REML is problem-specific and necessitates greater researcher attention to resource allocation. For example, even when a precomputed GRM is available, it might be preferable to use L_FOMC_REML if BLUPs of latent SNP effects are desired. On the other hand, if a researcher intends to sequentially analyze a large number of phenotypes in a relatively small sample of individuals, it might prove most efficient to compute a GRM, despite the involved computational burden, in order to speed subsequent computations by supplying the GRM to the SLDF_REML algorithm. Second, neither algorithm mitigates the substantial O(mn) or On2 memory complexity common to all algorithms for REML estimation of genomic variance components, requiring that researchers have access to high-memory compute nodes to work with large samples (though we note that neither of the novel algorithms substantial increases this burden either). Finally, for the same reasons that the spectral decomposition-based direct methods implemented in the FaST-LMM and GEMMA packages [3, 5, 6] are restricted to the simple two component model (1) (i.e., whereas the GRM and identity matrix are simultaneously diagonalizable, the same doesn’t hold for arbitrary collections of three or more symmetric positive semidefinite matrices), the shift-invariance property exploited by the proposed methods does not extend to multiple genomic variance components. Given that the two component model is insufficient for precise heritability estimation for many complex traits [11], our novel algorithms apply to the particular, though common, tasks of variance component and BLUP estimation for LMM in association studies.
+
+Despite these limitations, the proposed algorithms have clear advantages over existing methods in terms of flexibility, accuracy, and speed of computation. We provide both pseudocode and heavily annotated Python 3 implementations [9] to facilitate their incorporation into existing software packages. Further, though our algorithms are restricted to the two variance component model, they can be used to generate the inputs necessary for estimation of more complex models, such as the mixture model estimated via variational approximation implemented in [7], and thus have applications to non-infinitesimal models. Finally, we suggest that the methods presented in our theoretical development, in particular stochastic trace estimation and stochastic Lanczos quadrature, are likely to find uses in REML estimation of other models of interest to researchers in genomics. In particular, we suggest the development of models that exploit Krylov subspace shift-invariance to speed up variance/covariance component estimation for the case of multivariate phenotypes as a target for future research. Such models necessarily involve the computation or approximation of Hessian matrices, thereby introducing additional complexity in comparison to the univariate case considered above. However, the extension of fast cubic complexity methods based on the spectral decomposition of the covariance matrix [3, 5] to the multivariate case [6] suggests the potential for multivariate analogues of the algorithms presented here.
+
+Conclusions
+The proposed algorithms, SLDF_REML and L_FOMC_REML, unify previous approaches to estimating the two variance component model (1) by exploiting the simultaneous diagonalizability of the covariance structure components while avoiding matrix operations with cubic time complexity. As a result, the most expensive operations only need to be performed once, as with the spectral decomposition performed in the FaST-LMM and GEMMA software packages [3, 5, 6], but these operations consist only of matrix-vector products, as in the BOLT-LMM software package [7, 8]. All but one iteration of the REML optimization procedure requires only vector operations, yielding increased speed and numerical precision relative to existing methods. Furthermore, the unique strengths of the two methods lead to a flexible approach depending on researcher goals: SLDF_REML is capable of operating on precomputed GRMs when available, whereas L_FOMC_REML can generate BLUPs of latent SNP effects without added computational burden. We recommend these algorithms for incorporation into GWAS LMM implementations.
+
+Method
+We consider the two component genomic variance components model commonly employed in LMM association studies [1], which is of the form 
+ 1 y=Xβ+1mZu+e,u∼i.i.d.N0,σg2,e∼i.i.d.N0,σe2, 
+
+where y is a measured phenotype, the c≪n columns of X∈ℝn×c are covariates (including an intercept term) with corresponding fixed effects β, and Z∈ℝn×m is a matrix of n individuals’ standardized genotypes at m loci. Without loss of generality, we assume that X has full column rank; in the case of numerical rank deficiency we can simply replace X by the optimal full rank approximation generated by its economy singular value decomposition or rank revealing QR decomposition. The latent genetic effects u∈ℝm and residuals e∈ℝn are random variables with distributions parametrized by the heritable and non-heritable variance components, σg2 and σe2, respectively. The REML criterion corresponds to the marginal likelihood of σg2,σe2|KTy, where KT projects to an (n−c)-dimensional subspace orthogonal to the covariate vectors such that the null space of KT is exactly the column space of X [12]. In other words KT:ℝn→S⊂ℝn−c such that ℝn=S⊕colX. The transformed random variable KTy has the marginal distribution KTy∼ℳVN0,σg21mKTZZTK+σe2KKT, which we reparametrize as KTy∼ℳVN0,σg2KTHτK, where 
+ 2 Hτ=1mZZT+τIn,τ=σe2/σg2. 
+
+Here, 1mZZT, which indicates the average covariance between individuals’ standardized genotypes, is often referred to as the genomic relatedness matrix (GRM). The REML criterion, or marginal log likelihood, can be expressed as a function of τ: 
+ 3 ℓτ|KTy∝−(n−c)lnσ^g2(τ)−σ^e2(τ)−1yTPτy−lndetKTHτK, 
+
+where Pτ=K(KTHτK)−1KT, and, as implied by the REML first-order (stationarity) conditions, σ^e2(τ) is the expected residual variance component given τ and σ^g2(τ)=σ^e2(τ)/τ [12, 13]. In practice, K is never explicitly formed.
+
+Naïve procedures for maximizing the REML criterion require evaluating (3) or its derivatives at each iteration of the optimization procedure. Previous methods either reduce the number of necessary cubic time complexity operations to one by exploiting problem structure, or substitute quadratic time complexity iterative and stochastic matrix operations for direct computations (Fig. 1). Here, we unify these approaches via the principle of Krylov subspace shift invariance to achieve methods that only require a single iteration of quadratic time complexity operations.
+
+In what follows, we first present a brief survey of the Lanczos process, its applications to families of shifted linear systems, and its use in constructing Gaussian quadratures for spectral matrix functions. We assume familiarity with the method of conjugate gradients, an iterative procedure for approximating solutions to symmetric positive definite linear systems, and Gaussian quadrature, a method for approximating the integral of a given function by a well chosen weighted sum of its values; if not, see [14] and [15], respectively. We present these methods toward the goal of efficiently evaluating the quadratic form and log-determinant terms appearing in the REML criterion (3). We then present the details of the SLDF_REML and L_FOMC_REML algorithms, both of which exploit problem structure via Lanczos process-based methods in order to speed computation. Finally, we derive expressions for the computational complexity of the present algorithms, which we confirm via numerical experiment.
+
+
+
+
+
+Preliminaries
+The notation in this section is self-contained. Our presentation borrows from the literature extensively; further details on the (block) Lanczos procedure [14, 16], conjugate gradients for shifted linear systems [17, 18], stochastic trace estimation [19, 20], and stochastic Lanczos quadrature [21–23] are suggested in the bibliography.
+
+Krylov subspaces
+Consider a symmetric positive-definite matrix A and nonzero vector b. Define the mth Krylov subspace by the span of the first m−1 monomials in A applied to b; that is, Km(A,b)=spanAkb:k=0,…,m−1. Krylov subspaces are shift invariant—i.e., for real numbers σ, we have Km(A,b)=Km(A+σI,b).
+
+The Lanczos procedure
+The Lanczos procedure generates the decomposition AUm=UmTm, where the columns u1,…,um of Um form an orthonormal basis for Km(A,b) and the Jacobi matricesTm∈ℝm×m are symmetric tridiagonal. Choosing u1=b/∥b∥, successive columns are uniquely determined by the sequence of Lanczos polynomials {pk}k=1m−1 such that each uk=pk−1(A)u1 and each pk is the characteristic polynomial of Jacobi matrix Tk consisting of the first k rows and columns of Tm. The Lanczos procedure is equivalent to the well-known method of conjugate gradients (CG) for solving the linear system Ax=b in that the mth step CG approximate solution x(m) is obtained from the above decomposition using only vector operations (see Algorithm 1). The number of steps m prior to termination corresponds to the number of CG iterations need to bound the norm of the residual below a specified tolerance: ∥Ax(m)−b∥<ε. The rate of convergence depends on the spectral properties of A and can be controlled in terms of the spectral condition number κ(A). In the present application, the fact that all complex traits of interest generally have a non-trivial non-heritable component results in well-conditioned systems [7, 9].
+
+Solving families of shifted linear systems
+Having applied the Lanczos process to the seed system
+Ax=b, shift-invariance can be exploited to obtain the mth step CG approximate solution xσ(m) to the shifted linear system
+Aσxσ=(A+σI)xσ=b, only using vector operations [17]. It can be shown that any positive shift by σ≥0 improves the rate of convergence such that Aσxσ(m)−b=δmδm+σAx(m)−b, where δm>0 is the mth diagonal element of the Lanczos Jacobi matrix corresponding to Km(A,b).
+
+
+
+
+
+Lanczos polynomials and Gaussian quadrature
+Additionally, the Lanczos polynomials comprise a sequence of orthogonal polynomials with respect to the spectral measure
+ μA,v(t)=∑j=1ℓ:λℓ≤tQTvj2,  where A=QΛQT is the spectral decomposition [21, 22]. Quadratic forms vTf(A)v involving spectral functions
+f(A)=Qf(Λ)QT, e.g., for the matrix logarithm, vT(logA)v=∑i=1nln(λi)QTvi2, can be written as Riemann–Stieltjes integrals of the form 
+ 4 vTQf(Λ)QTv=∫λ1λnf(t)dμA,v(t). 
+
+The Lanczos decomposition AUm=UmTm generates the weights and nodes for an m-point Gaussian quadrature approximating the above integral. Denoting the spectral decomposition of the jth Jacobi matrix Tj=WjDjWjT for j=1,…,m, we approximate (4) as 
+ ∫λ1λnf(t)dμA,v(t)≈∑ℓ=1mωj,ℓf(θj,ℓ),  where θj,ℓ={Dj}ℓ,ℓ and ωj,ℓ=e1TWjℓ. As m here corresponds to the number of CG iterations needed to ensure that ∥Ax(m)−v∥ is smaller than a specified tolerance, the tridiagonal Jacobi matrices are small and calculating their spectral decompositions is computationally trivial.
+
+Stochastic Lanczos quadrature
+Stochastic Lanczos quadrature (SLQ) combines the above quadrature formulation with Hutchinson-type stochastic trace estimators [21]. Such estimators approximate the trace of a matrix H∈ℝn×n by a weighted sum of quadratic forms tr(H)≈nnrand∑k=1nrandvkTHvk for normalized, suitably distributed i.i.d. random probing vectors{vj}j=1nrand [19]. The SLQ approximate trace of a spectral function of a matrix, tr(f(A)), is then 
+ 5 tr(f(A))≈nnrand∑k=1nrandvkTQf(A)QTvk=nnrand∑k=1nrand∫λ1λnf(t)dμA,vk(t)≈nnrand∑k=1nrand∑ℓ=1mκωk,ℓf(θk,ℓ). 
+
+Whereas the number of probing vectors nrand is chosen a priori, the number quadrature nodes mκ corresponds to the number of conjugate gradient iterations needed to ensure Aσxjσ(mκ)−vj is less than a specified tolerance for each j=1,…,nrand.
+
+SLQ and shift invariance
+For a fixed probing vector vi, we can exploit the shift invariance of Km(A,vi) to efficiently update Gaussian quadrature generated by the corresponding Lanczos decomposition AUm=UmTm. Again denoting the spectral decomposition of the Jacobi matrix Ti=WiDiWiT, the Lanczos decomposition of the shifted system is simply AσUm=UmWm(Dm+σIm)WmT. Thus, given the approximation (5) for tr(f(A)), we can efficiently compute an approximation of tr(f(Aσ)) for any σ>0. In Algorithm 2 we implement a method for estimating tr(log(Aσ)) in O(nrand) operations given the spectral decompositions of the Jacobi matrices corresponding to Km(A,vj) for probing vectors {vj}j=1nrand.
+
+Block methods
+For multiple right hand sides B=[b1|⋯|bc], the Lanczos procedure can be generalized to the block Krylov subspaceKm(A,B)=⊗j=1cKm(A,bj), resulting in a collection of Lanczos decompositions AUj=UjTj such that {Uj}1=bj/∥bj∥ for j=1,…,c. This process is equivalent to block CG methods in that the Jacobi matrices can again be used to generate an approximate solution X(m) to the matrix equation AX(m)=B. We provide an implementation of the block Lanczos procedure in L_Seed [9], employing a conservative convergence criterion defined in terms of the magnitude of the (1,2) operator norm of the residual AB−X(m)1→2=maxjAbj−xj(m)2. Compared to performing c separate Lanczos procedures with respect to {Km(A,bj)}j=1c, block Lanczos with respect to Km(A,b), with B=[b1|⋯|bc], produces the same result (for a fixed number of steps). However, block Lanczos employs BLAS-3 operations and is thus more performant, especially when implemented on top of parallelized linear algebra subroutines.
+
+A derivative-free REML algorithm
+We propose the stochastic Lanczos derivative-free residual maximum likelihood algorithm (SLDF_REML; Algorithm 3), a method for efficiently and repeatedly evaluating the REML criterion, which is then subject to a zeroth-order optimization scheme. To achieve this goal, we first identify the parameter space of interest with a family of shifted linear systems. We then develop a scheme for evaluating the quadratic form yTPτy and log determinant ln(det(KTHτK)) terms in the REML criterion (3) that use the previously discussed Lanczos methods to exploit this shifted structure. Specifically, after obtaining a collection of Lanczos decompositions, we can repeatedly solve the linear systems involved in the quadratic form term via Lanczos conjugate gradients and approximate the log determinant term via stochastic Lanczos quadrature.
+
+
+
+
+
+The parameter space as shifted linear systems
+Given a range of possible values of the standardized genetic variance component, or heritability, 
+ 6 h2=σg2/σg2+σe2,h2∈hmin2,hmax2, 
+
+we set τ0=(1−hmax2)/hmax2 and define H0=Hτ0, noting that for all τ∈Θ=1−h2/h2:h2∈hmin2,hmax2, the spectral condition number of Hτ will be less than that of H0 as the identity component of Hτ will only increase. Further, we have now identified elements of our parameter space τ∈Θ with the family of shifted linear systems 
+ ℋτ0={Hσ=Hτ=H0+σIn:σ=τ−τ0}. 
+
+For any vector v for which we have computed the Lanczos decomposition H0U=UT with the first column of U equal to v/∥v∥, we can use Algorithm 1 to obtain the CG approximate solution xσ≈Hσ−1v for all σ≥0 in O(n) operations.
+
+The quadratic form
+Directly evaluating the quadratic form 
+ 7 yTPτy=yTKKTHτK−1KTy 
+
+is computationally demanding and is typically avoided in direct estimation methods [12, 13]. Writing the complete QR decomposition of the covariate matrix X=[QX|QX⊥]R allows us to define KT=QX⊥T, noting that substituting QX⊥QX⊥T for KT preserves the value of (7). QX⊥QX⊥T is equivalent to the orthogonal projection operator S:v↦v−QXQXTv, which admits an efficient implicit construction and is computed in O(nc2) operations via the economy QR decomposition X=QXRX. Then, reexpressing (7) as yTS(SHτS)†Sy, we can use the Lanczos process to construct an orthonormal basis and corresponding Jacobi matrix for the Krylov subspace K(SH0S,Sy). We can then obtain the CG approximation of yTS(SHσS)−1Sy using vector operations as, for any shift σ, we have yTS(SHσS)†Sy=yTS(SH0S+σIn)−1Sy (see Lemma 1 in Additional file 1 for proof).
+
+The log determinant
+We use an equivalent formulation [12, 24] of the term ln(det(KTHτK)), rewriting it as 
+ ln(det(Hτ))+lndetXTHτ−1X−lndetXTX. 
+
+The det(XTX) term is constant with respect to τ and can be disregarded. For c≪n, detXTHτ−1X is computationally trivial via direct methods given Hτ−1X, which we can compute for all parameter values of interest in O(n) operations having first applied the block Lanczos process with respect to K(H0,X). Computing the block Lanczos decomposition corresponding to K(H0,X), which is only performed once, unfortunately scales with the number of covariates c, a disadvantage not shared by our second algorithm (Algorithm 4). The remaining term, ln(det(Hτ)), is approximated by applying SLQ (Algorithm 2) to a special case of (5): We rewrite the log determinant as the trace of the matrix logarithm 
+ ln(det(Hτ))=tr(log(Hτ))=trQ[ln(λ1+σ)|⋯|ln(λn+σ)]QT, 
+
+where we have spectrally decomposed H0=QΛQT for some τ0≤τ with σ=τ−τ0. We draw nrand
+i.i.d. normalized Rademacher random vectors v1,…,vnrand, where each element of each vector vi takes values of either 1/∥vi∥ or −1/∥vi∥ with equal probability. The SLQ approximate of the log determinant for the seed system is 
+ ln(det(Hσ))≈nnrand∑i=1nrand∑ℓ=1miωi,ℓln(θi,ℓ+σ),  where the weights wi,ℓ and nodes θi,ℓ are respectively derived by using the Lanczos process to construct orthonormal bases for K(H0,vi) (in practice, we apply block Lanczos to K(H0,(v1,…,vnrand))) [21, 22].
+
+
+
+
+
+The SLDF_REML algorithm
+Stochastic Lanczos derivative-free residual maximum likelihood (SLDF_REML; Algorithm 3), conceptually similar to the derivative-free algorithm of Graser and colleagues [13], applies the previously introduced Lanczos methods to approximate the above reparametrization of the REML criterion. Shift-invariance is then exploited such that, with the exception of the initial Lanczos decompositions, the REML log likelihood can be repeatedly evaluated using only vector operations. SLDF_REML takes a phenotype vector y∈ℝn, a covariate matrix X∈ℝn×c, either the genetic relatedness matrix ZZT∈ℝn×n or the standardized genotype matrix Z∈ℝn×m (in which case the action of the GRM as a linear operator is coded implicitly as v↦Z(ZTv)), and a range of possible standardized genomic variance component values Θ=hmin2,hmax2 as arguments and generates a function REML_criterion:Θ→ℝ that efficiently computes the log-likelihood of τ|KTy. This function is then subject to scalar optimization via Brent’s method, which is feasible given the low cost of evaluation and low dimension of Θ. Hyperparameters include the number of probing vectors to be used for the SLQ approximation of the log determinant nrand, as well as tolerances corresponding to the REML criterion, parameter estimates, and the Lanczos residual norms. Convergence to a given tolerance on a sensible scale is ensured by optimizing with respect to the heritability h2∈Θ⊆ [ 0,1] and evaluating the REML criterion at τ=(1−h2)/h2. The REML criterion can be repeatedly evaluated in O(n) operations, making high accuracy computationally feasible.
+
+A first-order Monte Carlo REML algorithm
+We additionally propose the Lanczos first-order Monte Carlo residual maximum likelihood algorithm (L_FOMC_REML; Algorithm 4), which also takes advantage of the shifted structure of the standard genomic variance components model to speed computation. We first present the related first-order algorithm implemented in the efficient and widely-used BOLT-LMM software [7, 8], which we refer to as BOLT_LMM and of which the proposed L_FOMC_REML algorithm is a straightforward extension.
+
+BOLT_LMM (First-order Monte Carlo REML)
+The BOLT_LMM algorithm is based on the observation that at stationary points of the REML criterion (3), the first-order REML conditions (i.e., ∇ℓ=0) imply that 
+ 8 𝔼ũTũ|y=ũTũ,𝔼e~Te~|y=e~Te~, 
+
+where ũ and e~ are the best linear unbiased predictions (BLUPs) of the latent genetic effects and residuals, respectively [25]. The BLUPs are functions of τ given by 
+ 9 ũ(τ)=m−1/2ZTSH´τ−1Sy,e~(τ)=τH´τ−1Sy, 
+
+where we have defined H´τ=1mSZZTS+τIn. The expectations (8) are approximated via the following stochastic procedure: Monte Carlo samples of the latent variables, uˇk∼i.i.dℳVN(0,Im), ěk∼i.i.dℳVN(0,S) are used to generate samples of the projected phenotype vector 
+ yˇk=m−1/2SZuˇk+ěk,k=1,…nrand. 
+
+BLUPs are then computed as in (9), yielding the approximations 
+ 𝔼MCũTũ|y=nrand−1m∑k=1nrandZTSH´τ−1Syˇk2,𝔼MCe~Te~|y=nrand−1∑k=1nrandτH´τ−1Syˇk2. 
+
+Using the above expressions, Loh et al. [7, 8] apply a zeroth-order root-finding algorithm to the quantity 
+ fr(τ)=lnũTũe~Te~−ln𝔼MCũTũ|y𝔼MCe~Te~|y,  noting that fr=0 is a necessary condition (and, in practice, a sufficient condition) for (8). Using CG to approximate solutions to the linear systems involved in BLUP computations results in an efficient REML estimation procedure involving O(n·m·nrand) operations for well-conditioned covariance structures (i.e., for nontrivial non-heritable variance component values). As noted in [8], implicit preconditioning of H0 can be achieved by including the first few right singular vectors of the genotype matrix (or eigenvectors of the GRM) as columns of the covariate matrix X.
+
+The L_FOMC_REML algorithm
+The BOLT_LMM algorithm described above involves solving nrand+1 linear systems 
+ H´τℓ−1Syˇ,H´τℓ−1Syˇ1,…,H´τℓ−1Syˇnrand,  at each iteration of the optimization scheme in order to compute BLUPs of the latent variables for the observed phenotype vector and each of the Monte Carlo samples. However, each iteration involves spectral shifts of the left hand side of the form 
+ H´τℓ+1−1=H´τℓ+σIn−1,σ=(τℓ+1−τℓ).  As in the SLDF_REML algorithm, the underlying block Krylov subspace is invariant to these shifts (i.e., KmH´τ,Y=KmH´τ+σI,Y, where Y=y|yˇ1|⋯|yˇnrand). Thus, having performed the Lanczos process for an initial parameter value τ0, we can use L_Solve (Algorithm 1) to obtain the block CG approximate solution Xσ(m)≈H´τ+σ−1Y in O(n·nrand) operations. We are thus able to avoid solving linear systems in all subsequent iterations, though the relatively small number of matrix-vector products involved in computing BLUPs for the latent genetic effects at each step are unavoidable. The requirement of the genotype matrix for computing (9) prevents both L_FOMC_REML and BOLT_LMM from efficiently exploiting precomputed GRMs.
+
+Comparison of methods
+We compare theoretical and empirical properties of our proposed algorithms, SLDF_REML and L_FOMC_REML, to those of BOLT_LMM.
+
+Computational complexity
+In contrast to BOLT_LMM, the Lanczos-decomposition based algorithms we have proposed only need to perform the computationally demanding operations necessary to evaluate the REML criterion once. As such, we differentiate between overhead computations, which occur once and do not depend on the number of iterations needed to achieve convergence, and per-iteration computations, which are repeated until convergence of the optimization process (Table 1 and Fig. 2).
+
+The overhead computations of SLDF_REML are dominated by the need to construct bases for the nrand+c+1 subspaces K(H0,[vˇ1,…,vˇnrand,x1,…,xc,y]), and are thus On2(nrand+c)nκ when a precomputed GRM is available and O(2m·n(nrand+c)nκ) otherwise. Here, nκ denotes the number of Lanczos iterations needed to achieve convergence at a pre-specified tolerance and increases with hmax2. Subsequent iterations are dominated by the cost of solving c+1 shifted linear systems via L_Solve and are thus O(n·c·nκ). The overhead computations in L_FOMC_REML are dominated by the Lanczos decompositions corresponding to the 2nrand+1 seed systems, where the GRM is implicitly represented in terms of the standardized genotype matrix, and is thus O(4m·n·nrand·nκ). Operations of equivalent complexity are needed at every iteration of BOLT_LMM.
+
+Numerical experiments
+We compared wall clock times for genomic variance component estimation for height in nested random subsets of 16,000, 32,000, 64,000, 128,000, and 256,000 unrelated (π^<.05) European ancestry individuals from the widely used UK Biobank data set [26]. All analyses included 24 covariates consisting of age, sex, and testing center and used hard-called genotypes from 330,723 array SNPs remaining after enforcing a 1% minor allele frequency cutoff. We compared SLDF_REML, with and without a precomputed GRM, to L_FOMC_REML which requires the genotype matrix. For the novel algorithms, absolute tolerances for the Lanczos iterations and the REML optimization procedure were set to 5e-5 and 1e-5, respectively. Additionally, we compared our interpreted Python 3.6 code to BOLT-LMM versions 2.1 and 2.3.3 (C++ code compiled against the Intel MKL and Boost libraries) [7, 8, 27, 28]. We ran each algorithm twenty times per condition, trimming away the two most extreme timings in each condition. Mirroring the default settings of the BOLT-LMM software packages, we set nrand=15 across both of our proposed methods.
+
+Novel algorithms were implemented in the Python v3.6.5 computing environment [9], using NumPy v1.14.3 and SciPy v1.1.0 compiled against the Intel Math Kernel Library v2018.0.2 [28–30]. Optimization was performed using SciPy’s implementation of Brent’s method, with convergence determined via absolute tolerance of the standardized genomic variance component ĥ2. Timing results (Table 2 and Figs. 3 and 5) do not include time required to read genotypes into memory, or, when applicable, to compute GRMs, and reflect total running time on an Intel(R) Xeon(R) Gold 6130 CPU @ 2.10GHz with 32 physical cores and 1 terabyte of RAM. Timing experiments excluded methods with cubic time complexity, including GCTA, FaST-LMM, and GEMMA. Accuracy was assessed by comparing heritability estimates generated by the stochastic algorithms to those estimated via the direct, deterministic average-information Newton–Raphson algorithm as implemented in the GCTA software package v1.92.0b2 [4] (Figs. 4 and 5).
+
+Additional file
+
+Additional file 1 Proof of result used to efficiently compute the quadratic form (7). (PDF 125 kb)
+
+ 
+
+
+Abbreviations
+BLASBasic linear algebra subprogram
+
+BLUPBasic linear unbiased prediction
+
+CGConjugate gradients method
+
+GCTAGenome-wide complex trait analysis [4]
+
+GRMGenomic relatedness matrix
+
+GWASGenome-wide association study
+
+LMMLinear mixed-effects model
+
+REMLResidual maximum likelihood
+
+SLQStochastic Lanczos quadrature
+
+Publisher’s Note
+
+Springer Nature remains neutral with regard to jurisdictional claims in published maps and institutional affiliations.
+
+Acknowledgements
+The authors wish to thank UK Biobank participants. Additionally, the authors thank Matthew C. Keller and Luke M. Evans for their thoughtful comments and provision of computational resources. Publication of this article was funded by the University of Colorado Boulder Libraries Open Access Fund.
+
+Authors’ contributions
+RB wrote the manuscript, developed the algorithms, wrote the code used in numerical experiments, and analyzed the data. SB supervised the project and contributed to the development of the algorithms and the writing of the manuscript. Both authors read and approved the final manuscript.
+
+Funding
+Richard Border was supported by a training grant from the National Institute of Mental Health (T32 MH016880) and by the Institute for Behavioral Genetics. Stephen Becker acknowledges funding by NSF grant DMS-1819251.
+
+Availability of data and materials
+The UK Biobank data are available to qualified researchers via the UK Biobank Access Management System (https://bbams.ndph.ox.ac.uk/ams). The code used in the numerical experiments is available on Github (https://github.com/rborder/SL_REML).
+
+Ethics approval and consent to participate
+UK Biobank data collection procedures were approved by the UK Biobank Research Ethics Committee (reference 11/NW/0382).
+
+Consent for publication
+Not applicable.
+
+Competing interests
+The authors declare that they have no competing interests.
+==== Refs
+References
+1 Yang J  Zaitlen NA  Goddard ME  Visscher PM  Price AL   Advantages and Pitfalls in the Application of Mixed Model Association Methods Nat Genet 2014 46 2 100 6 10.1038/ng.2876 24473328 
+2 Bates D, Mächler M, Bolker B, Walker S. Fitting Linear Mixed-Effects Models Using Lme4. 2014. arXiv preprint arXiv:14065823.
+3 Zhou X  Stephens M   Genome-Wide Efficient Mixed Model Analysis for Association Studies Nat Genet 2012 44 7 821 4 10.1038/ng.2310 22706312 
+4 Yang J  Lee SH  Goddard ME  Visscher PM   GCTA: A Tool for Genome-Wide Complex Trait Analysis Am J Hum Genet 2011 88 1 76 82 10.1016/j.ajhg.2010.11.011 21167468 
+5 Lippert C  Listgarten J  Liu Y  Kadie CM  Davidson RI  Heckerman D   FaST Linear Mixed Models for Genome-Wide Association Studies Nat Methods 2011 8 10 833 5 10.1038/nmeth.1681 21892150 
+6 Zhou X  Stephens M   Efficient Multivariate Linear Mixed Model Algorithms for Genome-Wide Association Studies Nat Methods 2014 11 4 407 10.1038/nmeth.2848 24531419 
+7 Loh PR  Tucker G  Bulik-Sullivan BK  Vilhjálmsson BJ  Finucane HK  Salem RM    Efficient Bayesian Mixed-Model Analysis Increases Association Power in Large Cohorts Nat Genet 2015 47 3 284 90 10.1038/ng.3190 25642633 
+8 Loh PR  Kichaev G  Gazal S  Schoech AP  Price AL   Mixed-Model Association for Biobank-Scale Datasets Nat Genet 2018 50 906 8 10.1038/s41588-018-0144-6 29892013 
+9 Border R. Stochastic Lanczos Likelihood Estimation of Genomic Variance Components. Appl Math Grad Theses Dissertations. 2018;120.
+10 de los Campos  Vazquez AI  Fernando R  Klimentidis YC  Sorensen D   Prediction of Complex Human Traits Using the Genomic Best Linear Unbiased Predictor PLoS Genet 2013 9 7 e1003608 10.1371/journal.pgen.1003608 23874214 
+11 Evans LM  Tahmasbi R  Vrieze SI  Abecasis GR  Das S  Gazal S    Comparison of Methods That Use Whole Genome Data to Estimate the Heritability and Genetic Architecture of Complex Traits Nat Genet 2018 50 5 737 45 10.1038/s41588-018-0108-x 29700474 
+12 Searle SR  Casella G  McCulloch CE  Variance Components, vol. 391 2009 United States Wiley 
+13 Graser HU  Smith SP  Tier B   A Derivative-Free Approach for Estimating Variance Components in Animal Models by Restricted Maximum Likelihood J Anim Sci 1987 64 5 1362 70 10.2527/jas1987.6451362x 
+14 Björck A   Numerical Methods in Matrix Computations, vol. 59 2015 Switzerland Springer 
+15 Atkinson KE   An Introduction to Numerical Analysis 2008 United Kingdom Wiley 
+16 O’Leary DP   The Block Conjugate Gradient Algorithm and Related Methods Linear Algebra Appl 1980 29 293 322 10.1016/0024-3795(80)90247-5 
+17 Frommer A  Maass P   Fast CG-Based Methods for Tikhonov-Phillips Regularization SIAM J Sci Comput 1999 20 5 1831 50 10.1137/S1064827596313310 
+18 Sogabe T. A Fast Numerical Method for Generalized Shifted Linear Systems with Complex Symmetric Matrices. Recent Dev Num Anal Num Comput Algoritm. 2010;:13.
+19 Hutchinson MF   A Stochastic Estimator of the Trace of the Influence Matrix for Laplacian Smoothing Splines Commun Stat Simul Comput 1990 19 2 433 50 10.1080/03610919008812866 
+20 Avron H  Toledo S   Randomized Algorithms for Estimating the Trace of an Implicit Symmetric Positive Semi-Definite Matrix J ACM 2011 58 2 8:1 8:34 10.1145/1944345.1944349 
+21 Golub GH  Matrices MG   Moments and Quadrature with Applications 2009 Princeton Princeton University Press 
+22 Ubaru S  Chen J  Saad Y.   Fast Estimation of Tr(f(A)) via Stochastic Lanczos Quadrature SIAM J Matrix Anal Appl 2017 38 4 1075 99 10.1137/16M1104974 
+23 Chen J, Saad Y. A Posteriori Error Estimate for Computing Tr(f(A)) by Using the Lanczos Method. 2018. arXiv:180204928 [math].
+24 Zhu S, Wathen AJ. Essential Formulae for Restricted Maximum Likelihood and Its Derivatives Associated with the Linear Mixed Models. 2018. arXiv:180505188 [stat].
+25 McCulloch C  Searle SR  Neuhaus JM  Generalized, Linear, and Mixed Models 2008 Hoboken Wiley 
+26 Sudlow C  Gallacher J  Allen N  Beral V  Burton P  Danesh J    UK Biobank: An Open Access Resource for Identifying the Causes of a Wide Range of Complex Diseases of Middle and Old Age PLoS Med 2015 12 3 e1001779 10.1371/journal.pmed.1001779 25826379 
+27 Schling B   The Boost C++ Libraries 2011 USA XML Press 
+28 Wang E, Zhang Q, Shen B, Zhang G, Lu X, Wu Q, et al. Intel Math Kernel Library. In: High-Performance Computing on the Intel®Xeon Phi™. New York: 2014. p. 167–88.
+29 Oliphant T. NumPy: A Guide to NumPy. 2006.
+30 Jones E, Oliphant T, Peterson P, et al. SciPy: Open Source Scientific Tools for Python. 2001.
+31 Loh PR  Bhatia G  Gusev A  Finucane HK  Bulik-Sullivan BK  Pollack SJ    Contrasting Genetic Architectures of Schizophrenia and Other Complex Diseases Using Fast Variance Components Analysis Nat Genet 2015 47 12 1385 92 10.1038/ng.3431 26523775
+
