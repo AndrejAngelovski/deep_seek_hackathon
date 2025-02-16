@@ -1,0 +1,680 @@
+
+==== Front
+101262635
+32661
+J Mach Learn Res
+J Mach Learn Res
+Journal of machine learning research : JMLR
+1532-4435
+1533-7928
+
+34733120
+nihpa1710202
+Article
+Estimation and Optimization of Composite Outcomes
+Luckett Daniel J. Genospace, Boston, MA 02108, USA
+
+Laber Eric B. Department of Statistics, North Carolina State University, Raleigh, NC 27607, USA
+
+Kim Siyeon Department of Biostatistics, University of North Carolina at Chapel Hill, Chapel Hill, NC 27607, USA
+
+Kosorok Michael R. Departments of Biostatistics and Statistics & Operations Research, University of North Carolina at Chapel Hill, Chapel Hill, NC 27599, USA
+
+DANIEL.LUCKETT.WORK@GMAIL.COM
+3 6 2021
+1 2021
+02 11 2021
+22 167https://creativecommons.org/licenses/by/4.0/ License: CC-BY 4.0, see https://creativecommons.org/licenses/by/4.0/. Attribution requirements are provided at http://jmlr.org/papers/v/.html.
+There is tremendous interest in precision medicine as a means to improve patient outcomes by tailoring treatment to individual characteristics. An individualized treatment rule formalizes precision medicine as a map from patient information to a recommended treatment. A treatment rule is defined to be optimal if it maximizes the mean of a scalar outcome in a population of interest, e.g., symptom reduction. However, clinical and intervention scientists often seek to balance multiple and possibly competing outcomes, e.g., symptom reduction and the risk of an adverse event. One approach to precision medicine in this setting is to elicit a composite outcome which balances all competing outcomes; unfortunately, eliciting a composite outcome directly from patients is difficult without a high-quality instrument, and an expert-derived composite outcome may not account for heterogeneity in patient preferences. We propose a new paradigm for the study of precision medicine using observational data that relies solely on the assumption that clinicians are approximately (i.e., imperfectly) making decisions to maximize individual patient utility. Estimated composite outcomes are subsequently used to construct an estimator of an individualized treatment rule which maximizes the mean of patient-specific composite outcomes. The estimated composite outcomes and estimated optimal individualized treatment rule provide new insights into patient preference heterogeneity, clinician behavior, and the value of precision medicine in a given domain. We derive inference procedures for the proposed estimators under mild conditions and demonstrate their finite sample performance through a suite of simulation experiments and an illustrative application to data from a study of bipolar depression.
+
+Individualized treatment rules
+Inverse reinforcement learning
+Precision medicine
+Utility functions
+==== Body
+pmc1. Introduction
+
+Precision medicine is an approach to healthcare that involves tailoring treatment based on individual patient characteristics (Hamburg and Collins, 2010; Collins and Varmus, 2015). Accounting for heterogeneity by tailoring treatment has the potential to improve patient outcomes in many therapeutic areas. An individualized treatment rule formalizes precision medicine as a map from the space of patient covariates into the space of allowable treatments (Murphy, 2003; Robins, 2004). Almost all methods for estimating individualized treatment rules have been designed to optimize a scalar outcome (exceptions will be discussed shortly). However, in practice, clinical decision making often requires balancing trade-offs between multiple outcomes. For example, clinicians treating patients with bipolar disorder must manage both depression and mania. Antidepressants may help correct depressive episodes but may also induce manic episodes (Sachs et al., 2007; Ghaemi, 2008; Goldberg, 2008; Wu et al., 2015). We propose a novel framework for using observational data to estimate a composite outcome and the corresponding optimal individualized treatment rule.
+
+The estimation of optimal individualized treatment rules has been studied extensively, leading to a wide range of estimators designed to suit an array of data structures and data-generating processes (Kosorok and Laber, 2019; Tsiatis et al., 2020). These estimators include: regression-based methods like Q-learning (Murphy, 2005; Qian and Murphy, 2011; Schulte et al., 2014; Laber et al., 2014a), A-learning (Murphy, 2003; Robins, 2004; Blatt et al., 2004; Moodie et al., 2007; Wallace and Moodie, 2015), and regret regression (Henderson et al., 2010); direct-search methods (Rubin and van der Laan, 2012; Zhang et al., 2012b; Zhao et al., 2012; Zhang et al., 2013; Zhou et al., 2017) based on inverse probability weighting (Robins, 1999; Murphy et al., 2001; van der Laan and Petersen, 2007; Robins et al., 2008); and hybrid methods (Taylor et al., 2015; Zhang et al., 2018). The preceding methods require specification of a single scalar outcome that will be used to define an optimal regime; were individual patient utilities known, then they could be used as the outcome in any of these methods. However, in general such utilities are not known though they can be elicited provided a high-quality instrument is available (Butler et al., 2018); in the absence of such an instrument, preference elicitation is difficult to apply. A method for constructing a composite utility that is best predicted using a non-parametric machine learning model is proposed by (Benkeser et al., 2020); howeer, they do not consider heterogeneous utilities or the construction of precision medicine strategies.1
+
+We propose a new paradigm for estimating optimal individualized treatment rules from observational data without eliciting patient preferences. The key premise is that clinicians are attempting to act optimally with respect to each patient’s utility and thus the observed treatment decisions contain information about individual patient utilities. This idea is similar to that introduced by Wallace et al. (2018) (see also Wallace et al., 2016); however, we provide an estimator for the probability that a patient is treated optimally, rather than assuming that all patients are treated optimally. We construct estimators of individual patient utilities which do not require that clinicians are acting optimally, only that they approximately follow an optimal policy. This approach allows us to describe the goals of the decision maker and how these goals vary across patients, determine what makes a patient more or less likely to be treated optimally under standard care, and estimate the decision rule which optimizes patient-specific composite outcomes. We develop this approach in the context of a single-stage, binary decision in the presence of two outcomes. An extension to the setting with more than two outcomes is discussed in the Appendix.
+
+Other methods for estimating optimal treatment rules in presence of multiple outcomes include using an expert-derived composite outcome for all patients (Thall et al., 2002, 2007; Murray et al., 2016; Moser et al., 2020). However, this does not account for differences in the utility function across patients and in some cases it may not be possible to elicit a high-quality composite outcome from an expert. Alternatively, multiple outcomes can be incorporated using set-valued treatment regimes (Laber et al., 2014b; Lizotte and Laber, 2016; Wu, 2016), constrained optimization (Linn et al., 2015; Laber et al., 2018; Wang et al., 2018), or inverse preference elicitation (Lizotte et al., 2012). Schnell et al. (2017) extend methods for estimating the benefiting subgroup to the case of multiple outcomes using the concept of admissibility (see also Schnell et al., 2016). However, none of these approaches provide a method for estimating an individual patient’s utility.
+
+This work is closely related to inverse reinforcement learning (Kalman, 1964; Ng et al., 2000; Abbeel and Ng, 2004; Ratliff et al., 2006), which involves studying decisions made by an expert and constructing the utility function that is optimized by the expert’s decisions. Inverse reinforcement learning has been successfully applied in navigation (Ziebart et al., 2008) and human locomotion (Mombaur et al., 2009). Inverse reinforcement learning methods assume that decisions are made in a single environment. However, in the context of precision medicine, both the utility function and the probability of optimal treatment may vary across patients. Our approach is a version of inverse reinforcement learning with multiple environments.
+
+This work is also related to the notion of stated and revealed preferences in the health economics literature.2 Viewed through this lens, our work might be characterized as using clinical decisions as a kind of surrogate for patient revealed preferences thereby avoiding the need for the elicitation of stated preferences using specialized instruments. This is advantageous as the construction of high-quality instruments is difficult and collection of preference information is not routine in many areas (Carlsson and Martinsson, 2003; Ryan et al., 2007; de Bekker-Grob et al., 2012; Soekhai et al., 2019); though see Butler et al. (2018) for an illustrative application when such an instrument is available. Challenges associated with preference elicitation for precision medicine are discussed in Laber et al. (2014b), Lizotte and Laber (2016).
+
+In Section 2, we introduce a pseudo-likelihood method to estimate patient utility functions from observational data. In Section 3, we state a number of theoretical results pertaining to the proposed method, including consistency and inference for the maximum pseudo-likelihood estimators. Section 4 presents a series of simulation experiments used to evaluate the finite sample performance of the proposed methods. Section 5 presents an illustrative application using data from the STEP-BD bipolar disorder study. Conclusions and a discussion of future research are given in Section 6. Proofs are given in the appendix along with additional simulation results and a discussion of an extension to more than two outcomes.
+
+2. Pseudo-likelihood Estimation of Utility Functions
+
+Assume the available data are (Xi, Ai, Yi, Zi), i = 1, …, n, which comprise n independent and identically distributed copies of (X, A, Y, Z), where X∈X⊆ℝp are patient covariates, A∈A={−1,1} is a binary treatment, and Y and Z are two real-valued outcomes for which higher values are more desirable. The extension to scenarios with more than two outcomes is discussed in the Appendix. An individualized treatment rule is a function d:X→A such that, under d, a patient presenting with covariates X = x will be assigned to treatment d(x). Let Y*(a) denote the potential outcome under treatment a∈A, and for any regime d, define Y*(d)=∑a∈AY*(a)1{d(X)=a}. An optimal regime for the outcome Y, say dYopt, satisfies EY*(dYopt )≥EY*(d) for any other regime d. The optimal regime for the outcome Z, say dZopt, is defined analogously. In order to identify these optimal regimes, and subsequently to identify the optimal regime across the class of utility functions introduced below, we make the following assumptions.
+
+Assumption 1 Consistency, Y = Y*(A) and Z = Z*(A).
+
+Assumption 2 Positivity, Pr(A = a|X = x) ≥ c > 0 for some constant c and all pairs (x,a)∈X×A.
+
+Assumption 3 Ignorability, {Y*(−1), Y*(1)}⊥A|X and {Z*(−1), Z*(1)}⊥A|X.
+
+In addition we assume that there is no interference between units nor are the multiple versions of treatment (Rubin, 1980). These assumptions are standard in causal inference (Robins, 2004; Hernan and Robins, 2010). Assumption 3 is not empirically verifiable in observational studies (Rosenbaum and Rubin, 1983; Rosenbaum, 1984).
+
+Define QY(x,a)=E(Y|X=x,A=a). Then, under the preceding assumptions, it can be shown that dYopt(x)=arg maxa∈AQY(x,a) (Zhang et al., 2012b; Qian and Murphy, 2011). Similarly, it follows that dZopt (x)=arg maxa∈AQZ(x,a) where QZ(x,a)=E(Z|X=x,A=a). In general, dYopt(x) need not equal dZopt(x); therefore, if both Y and Z are clinically relevant, neither dYopt nor dZopt may be acceptable. We assume that there exists an unknown and possibly covariate-dependent utility U = u(Y, Z), where u:ℝ2→ℝ measures the “goodness” of the outcome pair (y, z). The optimal regime with respect to U, say dUopt, satisfies EU*(dUopt)=Eu{Y*(dUopt),Z*(dUopt)}≥Eu{Y*(d),Z*(d)}=EU*(d) for any other regime d. The goal is to use the observed data to estimate the utility and subsequently dUopt . Define QU(x,a)=E(U|X=x,A=a). For the class of utility functions we consider below, QU(x, a) is a (possibly covariate-dependent) convex combination of QY (x, a) and QZ(x, a) and is therefore identifiable under the stated causal assumptions and furthermore dUopt(x)=arg maxa∈AQU(x,a).
+
+We assume that clinicians act with the goal of optimizing each patient’s utility and that their success in identifying the optimal treatment depends on individual patient characteristics. Therefore, we assume that the clinicians are approximately, i.e., imperfectly, assigning treatment according to dUopt(x). If the clinician were always able to correctly identify the optimal treatment and assign A=dUopt(X) for each patient, there would be no need to estimate the optimal treatment policy (Wallace et al., 2016). Instead, we assume that the decisions of the clinician are imperfect and that Pr{A=dUopt(x)|X=x}=expit(x⊤β) where β is an unknown parameter. We show in Section 2.2 that the model is identifiable under mild conditions; e.g., these exclude the possibility of a malevolent clinician that is systematically assigning poor treatments. We implicitly assume throughout that X may contain higher order terms, interactions, or basis functions constructed from patient covariates.
+
+2.1 Fixed Utility
+
+We begin by assuming that the utility function is constant across patients and takes the form u(y, z; ω) = ωy + (1 − ω)z for some ω ∈ [0, 1]. Lemma 1 of Butler et al. (2018) states that, for a broad class of utility functions, the optimal individualized treatment rule is equivalent to the optimal rule for a utility function of this form. Define Qω(x, a) = ωQY (x, a) + (1 − ω)QZ(x, a) and define dωopt(x)=arg maxa∈AQω(x,a). Let Q^Y,n and Q^Z,n denote estimators of QY and QZ obtained from regression models fit to the observed data (Qian and Murphy, 2011). For a fixed value of ω, let Q^ω,n(x,a)=ωQ^Y,n(x,a)+(1−ω)Q^Z,n(x,a) and subsequently let d^ω,n(x)=arg maxa∈AQ^ω,n(x,a) be the plug-in estimator of dωopt(x). Given Q^Y,n and Q^Z,n, d^ω,n(x) can be computed for each ω ∈ [0, 1].
+
+The joint distribution of (X, A, Y, Z) is f(X,A,Y,Z)=f(Y,Z|X,A)f(A|X)f(X)=f(Y,Z|X,A)f(X)exp[X⊤β1{A=dωopt(X)}]1+exp(X⊤β).
+
+Assuming that f(Y, Z|X, A) and f(X) do not depend on ω or β, the likelihood for (ω, β) is (1) Ln(ω,β)∝∏i=1nexp[Xi⊤β1{Ai=dωopt(Xi)}]1+exp(Xi⊤β),
+
+which depends on the unknown function dωopt . Plugging in d^ω,n for dωopt  into (7) yields the pseudo-likelihood (2) L^n(ω,β)∝∏i=1nexp[Xi⊤β1{Ai=d^ω,n(Xi)}]1+exp(Xi⊤β).
+
+If we let ω^n and β^n denote the maximum pseudo-likelihood estimators obtained by maximizing (2), then an estimator of the utility function is u^n(y,z)=u(y,z;ω^n)=ω^ny+(1−ω^n)z and expit (x⊤β^n) is an estimator of the probability that a patient presenting with covariates x would be treated optimally under standard care. An estimator of the optimal policy at x is d^ω^n,n(x)=arg maxa∈AQ^ω^n,n(x,a).
+
+Because the pseudo-likelihood given in (2) is non-smooth in ω, standard gradient-based optimization algorithms cannot be used. However, for a given ω, it is straightforward to compute the profile estimator β^n(ω)=arg maxβ∈ℝpL^n(ω,β). We can compute the profile pseudo-likelihood estimator over a grid of values for ω and select the point on the grid yielding the largest pseudo-likelihood. The algorithm to construct (ω^n, β^n) is given in Algorithm 1 below. Step (3) can be accomplished using logistic regression. The theoretical properties of this estimator are discussed in Section 3.
+
+2.2 Patient-specific Utility
+
+Outcome preferences can vary widely across patients in some application domains, including schizophrenia (Kinter, 2009; Strauss et al., 2010) and pain management (Gan et al., 2004). To accommodate this setting, we assume that the utility function takes the form u(y, z; x, ω) = ω(x)y + {1 − ω(x)}z where ω:X→[0,1] is a smooth function. For illustration, we let ω(x; θ) = expit(x⊤θ) where θ is an unknown parameter. Misspecified utility models are discussed in the Appendix. Define Qθ(x, a) = ω(x; θ)QY (x, a) + {1 − ω(x; θ)}QZ(x, a) and define dθopt(x)=arg maxa∈AQθ(x,a). Let Q^Y,n and Q^Z,n denote estimators of QY and QZ obtained from regression models fit to the observed data. For a fixed value of θ, let Q^θ,n(x,a)=ω(x;θ)Q^Y,n(x,a)+{1−ω(x;θ)}Q^Z,n(x,a) and subsequently let d^θ,n(x)=arg maxa∈AQ^θ,n(x,a) be the plug-in estimator of dθopt(x). Assume that decisions are made according to the model Pr{A=dθopt(x)|X=x}=expit(x⊤β). We compute the estimators (θ^n, β^n) of (θ, β) by maximizing the pseudo-likelihood (3) L^n(θ,β)∝∏i=1nexp[Xi⊤β1{Ai=d^θ,n(Xi)}]1+exp(Xi⊤β).
+
+An estimator for the utility function is u^n(y,z;x)=ω(x;θ^n)y+{1−ω(x;θ^n)}z and an estimator for the optimal decision function is d^θ^n,n. The model, as stated is not identifiable. However, we show below that it is identifiable under the following conditions.
+
+Assumption 4 The following conditions hold.
+
+β∈B⊂ℝp and θ∈Θ⊂ℝq, where B and Θ are compact.
+
+β0 ≠ 0.
+
+X is bounded (X∈X⊂ℝp a.s.).
+
+Let XS be the collection of subsets of X consisting of sets of the form {x∈X:dθ(x)≠dθ0(x)} for θ ∈ Θ \ {θ0}, together with the complements of these sets. Then: For all XS∈XS, 0 < Pr(X ∈ XS) < 1, and
+
+E (XXT/X ∈ XS) is full rank ∀XS∈XS.
+
+Theorem 5 (Identifiability) Under Assumption 4, (θ0, β0) is uniquely identified under the model given by Ln(θ,β).
+
+Remark 6 A less technical but sufficient condition is to assume that (β0, θ0) satisfies Pr{A=dθ0(_X)|X}>1/2 almost surely, i.e., that clinical decisions are always better than a coin toss. A proof of sufficiency is given in the Appendix.
+
+As before, the pseudo-likelihood given in (3) is non-smooth in θ and standard gradient-based optimization methods cannot be used. It is again straightforward to compute the profile pseudo-likelihood estimator β^n(θ)=arg maxβ∈ℝpL^n(θ,β) for any θ∈ℝp. However, because it is computationally infeasible to compute β^n(θ) for all θ on a grid if θ is of moderate dimension, we generate a random walk through the parameter space using the Metropolis algorithm as implemented in the metrop function in the R package mcmc (Geyer and Johnson, 2017) and compute the profile pseudo-likelihood for each θ on the random walk. Let L˜n(θ)=maxβ∈ℝpL^n(θ,β). We can compute L˜n(θ)=L^n{θ,β^n(θ)} by estimating β^n(θ) using logistic regression as described in Section 2.1. The algorithm to construct a random walk through the parameter space is given in Algorithm 2 below. After generating a chain (θ1, …, θB), we select the θk that leads to the largest value of L˜n(θk) as the maximum pseudo-likelihood estimator. Standard practice is to choose the variance of the proposal distribution, σ2, so that the acceptance proportion is between 0.25 and 0.5 (Geyer and Johnson, 2017).
+
+3. Theoretical Results
+
+Here we state a number of theoretical results pertaining to the proposed pseudo-likelihood estimation method for utility functions. We state results for a patient-specific utility function; the setting where the utility function is fixed is a special case. All proofs are deferred to the Appendix.
+
+We assume that Pr{A=dUopt(x)|X=x}=expit(x⊤β0) and that the true utility function is u(y, z; x, θ0) = ω (X; θ0)y + {1 − ω (X; θ0)}z, where ω(X; θ) has bounded continuous derivative on compact sets and dθ0opt(X)=dθopt(X) almost surely implies θ = θ0, i.e., the model introduced in Section 2.2 is well-defined and correctly specified with true parameters β0∈ℝp and θ0∈ℝd. We further assume that the estimators Q^Y,n(x,a) and Q^Z,n(x,a) are pointwise consistent for all ordered pairs (x, a). Along with Assumptions 1–3, we implicitly assume that the densities f(Y, Z|X, A) and f(X) exist. The following result states the consistency of the maximum pseudo-likelihood estimators for the utility function and the probability of optimal treatment. The proof involves verifying the conditions of Theorem 2.12 of Kosorok (2008).
+
+Theorem 7 (Consistency with patient-specific utility) Let the maximum pseudo- likelihood estimators be as in Section 2.2, (θ^n,β^n)=arg maxθ∈ℝp,β∈BL^n(θ,β). Assume that B is a compact set with β0∈B and that ‖EX‖<∞ Then, ‖θ^n−θ0‖→P0 and ‖β^n−β0‖→P0 as n→∞, where ∥ · ∥ is the Euclidean norm.
+
+Let Vθ(d)=E{u(Y,Z;X,θ)|A=d(X)} be the mean composite outcome in a population where decisions are made according to d. The following result establishes the consistency of the value of the estimated optimal policy. The proof uses general theory developed by Qian and Murphy (2011).
+
+Theorem 8 (Value consistency with patient-specific utility) Let θ^n be the maximum pseudo-likelihood estimator for θ and let d^θ^n,n be the associated estimated optimal policy. Then, under the given assumptions, |Vθ0(d^θ^n,n)−Vθ0(dθ0opt)|→P0 as n→∞.
+
+Next, we derive the convergence rate and asymptotic distribution of (θ^n, β^n). Assume that X is a bounded subset of ℝp and let ‖⋅‖X be the sup norm over X, i.e., for f:X→ℝ, ‖f‖X=supx∈X|f(x)|. Let ω˙θ(x)=(∂/∂θ)ω(x;θ). Assume that ‖‖ω˙θ0(x)‖‖X<∞ and that limθ→θ0‖‖ω˙θ(x)−ω˙θ0(x)‖‖X=0. Define RY (x) = QY (x, 1) − QY (x, −1) to be the treatment contrast for outcome Y at patient covariates X = x; define RZ(x) = QZ(x, 1) − QZ(x, −1) analogously. Let R0(x) = RY (x) − RZ(x) denote the difference in the treatment contrasts across the two outcomes. Similarly, define R^Y,n(x)=Q^Y,n(x,1)−Q^Y,n(x,−1), R^Z,n(x)=Q^Z,n(x,1)−Q^Z,n(x,−1), and R^0,n(x)=R^Y,n(x)−R^Z,n(x). Define Dθ(x) = ω(x; θ)RY (x) + {1 − ω(x; θ)}RZ(x) to be the convex combination of treatment contrasts dictated by ω(x; θ) and let D^θ,n(x)=ω(x;θ)R^Y,n(x)+{1−ω(x;θ)}R^Z,n(x). Note that dθopt(x)=sign{Dθ(x)} and d^θ,n(x)=sign{D^θ,n(x)}. Further define Pβ(x)=expit(x⊤β),
+
+ψi,A=[1{Ai=dθ0opt(Xi)}−Pβ0(Xi)]Xi,
+
+In(β)=En[Pβ(X){1−Pβ(X)}X X⊤],
+
+I0=E[Pβ0(X){1−Pβ0(X)}XX⊤].
+
+We use the following regularity conditions.
+
+Assumption 9 There exist independent and identically distributed influence vectors ψ1,Y,ψ2,Y,…∈ℝq1, and ψ1,Z,ψ2,Z,…∈ℝq2, and vector basis functions ϕY (x) and ϕZ(x) such that both ‖n{R^Y,n(x)−RY(x)}−ϕY(x)⊤n−1/2∑i=1nψi,Y‖X=oP(1)
+
+and ‖n{R^Z,n(x)−RZ(x)}−ϕZ(x)⊤n−1/2∑i=1nψi,Z‖X=oP(1).
+
+Let ZY,n=n−1/2∑i=1nψi,Y, ZZ,n=n−1/2∑i=1nψi,Z, ZA,n=n−1/2∑i=1nψi,A and q = q1 + q2. Furthermore, assume that ‖RY(x)‖X, ‖RZ(x)‖X, ‖‖ϕY(x)‖‖X and ‖‖ϕZ(x)‖‖X are bounded by some M < ∞. Let Σ0=E[{(ψ1,Y⊤,ψ1,Z⊤,ψ1,A⊤)⊤}⊗2] be positive definite and finite, where u⊗2 = uu⊤.
+
+Assumption 10 The following conditions hold.
+
+The random variable Dθ0(X) has a continuous density function f in a neighborhood of 0 with f0 = f(0) ∈ (0, ∞);
+
+The conditional distribution of X given that |Dθ0(X)|≤ϵ converges to a non-degenerate distribution as ϵ ↓ 0;
+
+There exist δ1, δ2 > 0 such that limϵ↓0inft∈SdPr[|X⊤β0|≥δ1,|{RY(X)−RZ(X)}ω˙θ0(X)⊤t|≥δ1||Dθ0(X)|≤ϵ]≥δ2,
+
+where Sd is the d-dimensional unit sphere.
+
+Assumption 11 Define, for ZY∈ℝq1, ZZ∈ℝq2, and U∈ℝd, (4) (ZY,ZZ,U)↦k0(ZY,ZZ,U)=E[X{2Pβ0(X)−1}⋅|ω(X;θ0)RY(X)ϕY(X)⊤ZY+{1−ω(X;θ0)}RZ(X)ϕZ(X)⊤ZZ+R0(X)ω˙θ0(X)⊤U||Dθ0(X)=0].
+
+Assume that U↦β0⊤k0(ZY,ZZ,U) has a unique, finite minimum over ℝd for all (ZY⊤,ZZ⊤)⊤∈ℝq.
+
+Remark 12 Assumption 9 establishes a rate of convergence for the estimated Q-functions and is automatically satisfied if the Q-functions are estimated using linear or generalized linear models with or without interactions or higher order terms. Assumption 10 is needed to ensure that there is positive probability of patients with x values near the boundary between where each treatment is optimal. Assumption 11 is standard in M-estimation.
+
+Let (θ^n, β^n) be the maximum pseudo-likelihood estimators given in Section 2.2. The following theorem states the asymptotic distribution of (θ^n, β^n).
+
+Theorem 13 (Asymptotic distribution) Under the given regularity conditions (5) n(θ^n−θ0β^n−β0)⇝(UI0−1{ZA−k0(ZY,ZZ,U)})≡(UB),
+
+where (ZY⊤,ZZ⊤,ZA⊤)⊤~N(0,∑0), and U=arg minu∈ℝdβ0⊤k0(ZY,ZZ,u).
+
+Let ⇝Z*P denote convergence in probability over Z*, as defined in Section 2.2.3 and Chapter 10 of Kosorok (2008). Theorem 14 below establishes the validity of a parametric bootstrap procedure for approximating the sampling distribution of (θ^n, β^n).
+
+Theorem 14 (Parametric bootstrap) Assume Σ^n=Σ0+oP(1) and hn=v^nn−1/5, where v^n→Pv0∈(0,∞) and v0 is the standard error of Dθ0(X). Assume the regularity conditions given above hold. Let Z*~N(0,Ir×r), where Ir×r is an r × r identity matrix and r = q + p. Let Z˜n=Σ^n1/2Z*=(Z˜Y⊤,Z˜Z⊤,Z˜A⊤)⊤, where Σ^n1/2=[Σ^11/20Σ^2Σ^1−1/2(Σ^2−Σ^21Σ^1−1Σ^12)1/2],
+
+Σ^1 is the top left q × q block of Σ^n (corresponding to ZY and ZZ), Σ^2 is the lower right p × p block, Σ^21. is the upper right q × p block, Σ^12=Σ^21⊤, and the matrix square roots are the symmetric square roots obtained from the associated Eigenvalue decompositions. Let T˜n(X,ZY,ZZ)=ω(X;θ^n)R^Y,n(X)ϕY(X)⊤ZY+{1−ω(X;θ^n)}R^Z,n(X)ϕZ(X)⊤ZZ
+
+and define k˜n(ZY,ZZ,U)=En[X{2Pβ^n(X)−1}⋅|T˜n(X,ZY,ZZ)+{R^Y,n(X)−R^Z,n(X)}ω˙θ^n(X)⊤U|⋅hn−1ϕ0{D^θ^n,n(X)/hn}]×{En[hn−1ϕ0{D^θ^n,n(X)/hn}]}−1,
+
+where ϕ0 is the standard normal density. Define U˜n=arg minu∈ℝdβ^n⊤k˜n(Z˜Y,Z˜Z,u) and B˜n=In(β^n)−1{Z˜A−k˜n(Z˜Y,Z˜Z,U˜n)}. Then, (6) (U˜nB˜n)⇝Z˜*P(UB),
+
+where (U⊤, B⊤)⊤ is as defined in Theorem 13.
+
+If we fix a large number of bootstrap replications, B, then (U˜n,b,B˜n,b),b=1,…,B will provide an approximation to the sampling distribution of the maximum pseudo-likelihood estimators. In Sections 4 and 5, we demonstrate the use of the bootstrap to test for heterogeneity of patient preferences.
+
+Remark 15 In Theorem 13, it can be seen that when β0 only involves an intercept, there is no relationship between β0 and U, as the argmax of an objective function does not change under multiplication by a positive scalar. This relationship is more complex when β0 includes covariate effects. Theorem 13 also indicates that the asymptotic behaviors of θ^ and β^ are driven largely by what happens at the boundary where Dθ0(X)=0.
+
+4. Simulation Experiments
+
+4.1 Fixed Utility Simulations
+
+To examine the finite sample performance of the proposed methods, we begin with the following simple generative model. Let X = (X1, …, X5)⊤ be a vector of independent normal random variables with mean 0 and standard deviation 0.5. Let treatment be assigned according to Pr{A=dωopt(x)|X=x}=ρ, i.e., the probability that the clinician correctly identifies the optimal treatment is constant across patients. Let ϵY and ϵZ be independent normal random variables with mean 0 and standard deviation 0.5 and let Y = A (4X1 − 2X2 + 2) + ϵY and Z = A (2X1 − 4X2 − 2) + ϵZ. We estimated QY and QZ using linear models, implemented the proposed method for a variety of n, ω, and ρ values, and examined ω^n, ρ^n, and d^ω^n,n, across 500 Monte Carlo replications per scenario.
+
+Table 1 contains mean estimates of ω and ρ across replications along with the associated standard deviation across replications, and estimated error rate defined as the proportion of subjects to whom the estimated optimal policy does not recommend the true optimal treatment; to better characterize sampling variability in the estimated error rate the last column displays the median along with the first and third quartiles of the sampling distribution of the estimated error rate.
+
+The pseudo-likelihood method performs well at estimating both ω and ρ, with estimation improving with larger sample sizes as expected. Table 2 contains estimated values of the true optimal policy, a policy where the utility function is estimated (the proposed method), policies estimated to maximize the two outcomes individually (corresponding to fixing ω = 1 and ω = 0), and the standard of care. The value of the standard of care is the mean composite outcome under the generative model. For each policy, the value is estimated by generating a testing sample of size 500 with treatment assigned according to the policy and averaging utilities (calculated using the true ω) in the testing set. The standard deviation across replications is included in parentheses.
+
+The column labeled “estimated ω” refers to the proposed method. We see that the proposed method produces values which increase with n and generally come close to the true optimal policy. In all settings, the proposed method offers significant improvement over the standard of care. The proposed method also offers improvement over policies to maximize each individual outcome.
+
+To further examine the performance of the proposed method, we allow the probability of optimal treatment to depend on patient covariates. Let Pr{A=dωopt(X)}=expit(0.5+X1). This corresponds to the case where β = (0.5, 1, 0, …, 0)⊤, where the first element of β is an intercept. Let X, Y, and Z be generated as described above. In this generative model, the probability that a patient is treated optimally in standard care is larger for patients with positive values of X1 and smaller for patients with negative values of X1. We applied the proposed method to 500 replications of this generative model for various n and ω. Table 3 contains mean estimates of ω, root mean squared error (RMSE) of β^n, and the error rate along with its standard error and quartiles.
+
+Estimation of the observational policy (as defined by β) improves with larger sample sizes. The probability that the estimated policy assigns the optimal treatment also increases with the sample size. The true value of ω does not affect estimation of ω or β.
+
+Table 4 contains estimated values of the true optimal policy, a policy where the utility function is estimated (the proposed method), policies estimated to maximize each outcome individually, and the standard of care. Values are estimated from independent testing sets of size 500 as described above. The value under the standard of care is the mean composite outcome under the generative model.
+
+The proposed method (found in the column labeled “estimated ω”) produces values that are close to the true optimal policy in large samples and a significant improvement over standard of care in small to moderate samples. We note that value under the standard of care differs across ω. When ω is close to 1, the composite outcome places more weight on Y, for which the magnitude of the association with X1 is larger. Because patients with larger values of X1 are more likely to be treated optimally in this generative model, the standard of care produces larger composite outcomes when ω is closer to 1. Likewise, the mean composite outcome under policies to maximize each individual outcome varies with the true value of ω.
+
+4.2 Patient-specific Utility Simulations
+
+Next, we examine the case where the utility function is allowed to vary across patients. Let X, Y, and Z be generated as above. Again, assume that Pr{A=dθopt(X)}=expit(0.5+X1), i.e., β = (0.5, 1, 0, …, 0)⊤. Consider the composite outcome U = ω(X; θ)Y + {1 − ω(X, θ)}Z, where ω(X; θ) = expit(1 − 0.5X1), i.e., θ = (1, −0.5, 0, …, 0)⊤, where the first element of θ is an intercept. We implemented the proposed method for various n and examined estimation of θ and β across 500 replications. Each replication is based on a simulated Markov chain of length 10,000 as described in Section 2.2. Results are summarized in Table 5.
+
+Larger sample sizes produce marginal decreases in the RMSE of θ^n. The estimated policy assigns the true optimal treatment more than 80% of the time for all sample sizes and the error rate decreases as the sample size increases. Table 6 contains estimated values of the true optimal policy, the policy estimated using the proposed method, policies estimated to maximize each outcome individually, and standard of care.
+
+The proposed method produces policies that achieve significant improvement over the standard of care across sample sizes.
+
+Finally, we examine the performance of the parametric bootstrap as described in Section 3. Let X be a bivariate vector of normal random variables with mean 0, standard deviation 0.5, and correlation zero. Let Y and Z be generated as above and let β = (2.5, 1, 0)⊤ where the first element of β is an intercept. Let θ(1) be the vector θ with the first element removed. We are interested in testing the null hypothesis H1 : ∥θ(1)∥ = 0, which corresponds to a test for heterogeneity of patient preferences. The table below contains estimated power across 500 Monte Carlo replications under the null hypothesis, where the true value is θ = (1, 0, 0)⊤, and two alternative hypotheses: H1 : θ = (1, 4, 3)⊤, and H2 : θ = (1, 6, 6)⊤. All tests were conducted at level α = 0.05 and based on 1000 bootstrap samples. The last column in Table 7 shows the average agreement between the bootstrap and estimated optimal decision rule when θ0 = (1, 0, 0); the results suggest the decision rule is stable at sample sizes and generative models considered.
+
+The proposed bootstrap procedure produces type I error rates near nominal levels under the null and moderate power in large samples under alternative hypotheses.
+
+5. Case Study: The STEP-BD Standard Care Pathway
+
+The Systematic Treatment Enhancement Program for Bipolar Disorder (STEP-BD) was a landmark study of the effects of antidepressants in patients with bipolar disorder (Sachs et al., 2007). In addition to a randomized trial assessing outcomes for patients given an antidepressant or placebo, the STEP-BD study also included a large-scale observational study, the standard care pathway. As our method requires observational data on clinical decision making, we apply the proposed method to the observational data from the STEP-BD standard care pathway to estimate decision rules for the use of antidepressants in patients with bipolar disorder. (Clearly, as clinicians are not generally assigning treatment according to their best clinical judgment in a randomized clinical trial, the proposed method is not applicable to the randomized pathway of STEP-BD.)
+
+Although bipolar disorder is characterized by alternating episodes of depression and mania, recurrent depression is the leading cause of impairment among patients with bipolar disorder (Judd et al., 2002). However, the use of antidepressants has not become standard care in bipolar disorder due to the risk of antidepressants inducing manic episodes in certain patients (Ghaemi, 2008; Goldberg, 2008). Thus, the clinical decision in the treatment of bipolar disorder is whether to prescribe antidepressants to a specific patient in order to balance trade-offs between symptoms of depression, symptoms of mania, and other side effects of treatment.
+
+We use the SUM-D score for depression symptoms and the SUM-M score for mania symptoms as outcomes. We consider a patient treated if they took any one of ten antidepressants that appear in the STEP-BD standard care pathway (Deseryl, Serzone, Citalopram, Escitalopram Oxalate, Prozac, Fluvoxamine, Paroxetine, Zoloft, Venlafaxine, or Bupropion). To generate candidate predictors for our model we made use of a complimentary randomized pathway in the STEP-BD trial. In this pathway, the patients are drawn from the same population, and the same variables are measured; however, treatment is randomly assigned so that there is no unmeasured confounding. Using step-wise variable selection to construct an outcome model from these data identified the following variables: mood elevation, anxiety, irritability, baseline SUM-M, and baseline SUM-D. We also used a step-wise logistic regression for the propensity score in the observational pathway to identify any additional potential confounders (Moodie et al., 2012). In addition to the variables in the outcome model, the logistic regression model identified race, insurance status, age, and substance abuse. The union of variables identified in through the randomized pathway and the propensity score were used in our models of the Q-functions and as tailoring variables in our treatment rules. Figure 1 contains box plots of SUM-D scores on the log scale by substance abuse and treatment. Figure 2 contains box plots of SUM-M scores on the log scale by substance abuse and treatment. For both outcomes, lower scores are more desirable. Figure 1 indicates that those without a history of substance abuse benefit from treatment with antidepressants. However, among those with a history of substance abuse, patients treated with antidepressants appear to have worse symptoms of depression. Figure 2 indicates that treatment has no effect on symptoms of mania among those without a history of substance abuse. However, among those with a history of substance abuse, it appears that treatment may be inducing manic episodes. Thus, a sensible treatment policy would be one that tends to prescribe antidepressants only to patients without a history of substance abuse.
+
+We analyzed these data using the proposed method for optimizing composite outcomes. Results are summarized in Table 8 below. We estimated policies where both utility and probability of optimal treatment are fixed (fixed-fixed), where utility is fixed but probability of optimal treatment is assumed to vary between patients (fixed-variable), and where both utility and probability of optimal treatment are assumed to vary between patients (variable-variable). For both the fixed-variable policy and the variable-variable policy, we report En{expit(X⊤β^n)} in place of ρ^n and for the variable-variable policy, we report En{expit(X⊤θ^n)} in place of ω^n. Thus, for parameters that are assumed to vary across patients, Table 8 contains the mean estimate in the sample. To evaluate each estimated policy, we used five-fold cross-validation of the inverse probability weighted estimator (IPWE) of the value for each outcome; i.e., for each fold, we used the training portion to estimate the optimal policy and propensity score, and we used the testing portion to compute the IPWE of the value; taking the average of the IPWE value estimates across folds yields the reported values. For both SUM-D and SUM-M, lower scores are preferred. Value is reported as the percent improvement over standard of care, calculated using the estimated utility function. Large percent improvements in value are preferred.
+
+All estimated policies produce more desirable SUM-D scores and SUM-M scores compared to standard of care and improved value according to the estimated utility. Allowing the probability of optimal treatment to vary between patients leads to further improvements in value, as does allowing the utility function to vary between patients. All policies produce similar estimates for the probability of optimal treatment averaged across patients.
+
+The resulting decision rules can be written as the sign of a linear combination of the covariates. As an example, the fixed-fixed policy assigns treatment with antidepressants when 0.032 − 0.001(age) − 0.646(substance abuse) − 0.007(mood elevation) + 0.007(medical insurance) + 0.129(white) is non-negative. The negative coefficient for substance abuse means that a history of substance abuse indicates that a patient should not be prescribed antidepressants. Prior research has shown that patients with a history of substance abuse are more likely to abuse antidepressants (Evans and Sullivan, 2014). This may contribute to the poor outcomes experienced by STEP-BD patients with a history of substance abuse who were treated with antidepressants. Table 9 displays estimates and standard errors of the components of θ^n in the variable-variable policy. A test for preference heterogeneity based on 1000 bootstrap samples generated according to Theorem 14 yielded a p-value < 0.001.
+
+As a secondary analysis, we use the SUM-D score and a side effect score as the outcomes. Eight side effects were recorded in the STEP-BD standard care pathway (tremors, dry mouth, sedation, constipation, diarrhea, headache, poor memory, sexual dysfunction, and increased appetite). Patients rated the severity of each side effect from 0 to 4 with larger values indicating more severe side effects. We took the mean score across side effects as the second outcome. Results are summarized in Table 10, reported analogously to those in Table 8.
+
+Each estimated policy produces improved SUM-D scores and improved side effect scores compared to the standard of care. Each policy also produces improvement in value according to the estimated utility function. Again, allowing the utility function to vary between patients results in further improvements in value. Each policy produces similar estimates of the probability that patients are treated optimally in standard care. The variable-variable policy places more weight on SUM-D scores on average compared to the other policies. Table 11 displays estimates and standard errors of coefficients in θ^n in the variable-variable policy. The bootstrap procedure for testing the null hypothesis that patient preferences are homogeneous based on 1000 bootstrap samples yielded a p-value < 0.001.
+
+6. Discussion
+
+The estimation of individualized treatment rules has been well-studied in the statistical literature. Existing methods have typically defined the optimal treatment rule as optimizing the mean of a fixed scalar outcome. However, clinical practice often requires consideration of multiple outcomes. Thus, there is a disconnect between existing statistical methods and current clinical practice. It is reasonable to assume that clinicians make treatment decisions for each patient with the goal of maximizing that patient’s utility. Therefore, it is natural to use observational data to estimate patient utilities from observed clinician decisions. This represents a new paradigm for the use of observational data in the context of precision medicine in that clinical decisions are viewed as a (noisy) surrogate for patient preferences and leveraged to improve the quality of a learned treatment rule and to generate new insights into heterogeneity in patient preferences.
+
+The proposed methodology offers many opportunities for future research. In the present manuscript, we have considered only the simplest case— that of one decision time, two outcomes, and two possible treatments. Scenarios with more than two outcomes are discussed in the Appendix, and the simulation results there demonstrate that the proposed method performs well with three outcomes. Extensions to more than two treatments or multiple time points represent potential areas for future research. The proposed method requires positing a parametric model for the utility function. Model misspecification is discussed in the Appendix, and the simulation results there demonstrate that the proposed method performs reasonably well when important covariates are omitted from the model for the utility function. However, the use of semi- or non-parametric models is an important extension. A more technical direction for future work is a more nuanced study of the affect of boundary conditions on the resulting rate of convergence (see Assumption 10). Finally, while we have proposed our utility function estimator inside the framework of one-stage Q-learning, the pseudo-likelihood utility function estimator could be used alongside other existing one-stage optimal treatment policy estimators based on (augmented) inverse probability weighting (e.g., Zhao et al., 2012; Zhang et al., 2012a). There is a great future for the development of methods for optimizing composite outcomes in precision medicine and application of these methods in clinical studies.
+
+Acknowledgments
+
+We would like to acknowledge support for this project from the National Science Foundation (NSF grants DMS-1555141 and DMS-1513579) and the National Institutes of Health (NIH grants R01 DK108073 and P01 CA142538). We also gratefully acknowledge the National Institute of Mental Health for providing access to the STEP-BD data set.
+
+Appendix A: Proofs
+
+Proof [Proof of Theorem 5] Consider (β,θ)∈B×Θ and suppose (7) Pβ(X)1{Y=dθ(X)}(1−Pβ(X)1−1{Y=dθ(X)}=Pβ0(X)1{Y=dθ0(X)}(1−Pβ0(X)1−1{Y=dθ0(X)}∀(X,Y) a.s.
+
+Let XS={X:dθ(X)=dθ0(X)}. For all X ∈ XS, we have that Pβ(X)=Pβ0(X)⇒β=β0 by 4 in Assumption 4 which implies identifiability of Pβ(X) on XS.
+
+Now suppose θ ≠ θ0, then since β = β0, we have by (7), that ∀X∈XSc, Pβ(X)=1−Pβ0(X) which by applying 4 in Assumption 4 again, we obtain that β = −β0. However, this is impossible by 2 in Assumption 4. Thus θ = θ0, and we obtain that (β, θ) = (β0, θ0). ■
+
+Proof [Proof of Theorem 7] The log of the pseudo-likelihood is given by l^n(θ,β)=En[X⊤β1{A=d^θ,n(X)}−log{1+exp(X⊤β)}].
+
+Let m^(⋅,⋅;θ,β):X×A→ℝ be defined by m^(X,A;θ,β)=X⊤β1{A=d^θ,n(X)}−log{1+exp(X⊤β)} and consider the class of functions {m^(⋅,⋅;θ,β):θ∈ℝp,β∈B}. The class {log{1+exp(X⊤β)}:β∈B} is contained in a VC class by Lemma 9.9 (viii) and (v) of Kosorok (2008). By Theorem 9.3 of Kosorok (2008), this is also a Glivenko–Cantelli (GC) class.
+
+Let u(X,A;θ)=ω(X;θ){Q^Y,n(X,A)−Q^Z,n(X,A)}+Q^Z,n(X,A), which lies in a VC class indexed by θ∈ℝp by Lemma 9.6 and Lemma 9.9 (viii), (vi), and (v) of Kosorok (2008). We have that 1{A=d^θ,n(X)}=1(A=1)1{u(X,1;θ)−u(X,−1,θ)≥0}+1(A=−1)1{u(X,1;θ)−u(X,−1,θ)<0}
+
+and it follows that 1{A=d^θ,n(X)} is contained in a GC class indexed by θ∈ℝp. From Corollary 9.27 (ii) of Kosorok (2008) it follows that X⊤β1{A=d^θ,n(X)} lies in a GC class indexed by (θ,β)∈ℝp×B as long as X⊤β is uniformly bounded by a function with finite mean, which holds as long as B is compact and ‖EX‖<∞. It follows that sup(θ,β)∈ℝp×B|(En−E)[X⊤β1{A=d^θ,n(X)}−log{1+exp(X⊤β)}]|→P0.
+
+Next, define M^(θ,β)=E{m^(X,A;θ,β)}=E(X⊤βE[1{A=d^θ,n(X)}|X])−Elog{1+exp(X⊤β)}
+
+and note that M^(θ,β) is continuous in β. The inside expectation of the first piece is E[1{A=d^θ,n(X)}|X]=expit(X⊤β0)1{d^θ,n(X)=dθ0opt(X)}+{1−expit(X⊤β0)}1{d^θ,n(X)≠dθ0opt(X)},
+
+using the fact that Pr{A=dθ0opt(X)}=expit(X⊤β0). Define a(X) = QY (X, 1)−QY (X, −1)−QZ(X, 1) + QZ(X, −1) and b(X) = QZ(X, 1) − QZ(X, −1). Similarly, define a^(X)=Q^Y,n(X,1)−Q^Y,n(X,−1)−Q^Z,n(X,1)+Q^Z,n(X,−1) and b^(X)=Q^Z,n(X,1)−Q^Z,n(X,−1). Then, 1{d^θ,n(X)=dθ0opt(X)}=1[{ω(X;θ)a^(X)+b^(X)}{ω(X;θ)a(X)+b(X)}≥0]=1[ω(X;θ){ω(X;θ)a(X)a^(X)+a^(X)b(X)}+ω(X;θ)a(X)b^(X)+b^(X)b(X)≥0],
+
+and thus E[1{A=d^θ,n(X)}|X] is continuous in θ.
+
+Let m(X,A;θ,β)=X⊤β1{A=dθopt(X)}−log{1+exp(X⊤β)}. Because the model is identifiable and Ln(θ,β) is a parametric log-likelihood, Em(X,A;θ,β) has unique maximizers at θ0 and β0. Let θ˜n and β˜n be the maximizers of Em^(X,A;θ,β). Because E{|d^θ,n(X)−dθopt(X)|}→0 in probability, for any θ∈ℝd, E[1{A=d^θ,n(X)}|X]−E[1{A=dθopt(X)}|X]→0 in probability, uniformly in θ over compact subsets of ℝd, which implies that both θ˜n→θ0 and β˜→β0 in probability. The claim now follows from Lemma 14.3 and Theorem 2.12 of Kosorok (2008).■
+
+Proof [Proof of Theorem 8] Define Qθ0(x,a) and Qθ^n(x,a) as defined in Section 2. Let u(Y, Z; A, X, θ) = ω(X; θ)QY (X, A) + {1 − ω(X; θ)}QZ(X, A). Under the given assumptions, for some constant 0 < c < ∞, (8) |V(d^θ^n,n)−V(dθ0opt)|≤c|E{u(Y,Z;A,X,θ0)−Q^θ^n,n(X,A)}2−E{u(Y,Z;A,X,θ0)−Qθ0(X,A)}2|1/2
+
+by equation (3.1) of Qian and Murphy (2011) (see also Murphy, 2005). The right hand side of (8) converges in probability to 0 by the consistency of θ^n, consistency of Q^Y,n and Q^Z,n, and the continuous mapping theorem. The result follows.■
+
+Proof [Proof of Theorem 13] By definition of (θ^n, β^n), 0≤l^n(θ^n,β^n)−l^n(θ0,β0)=∑i=1n[Xi⊤β^n1{Ai=d^θ^n,n(Xi)}−Xi⊤β01{Ai=d^θ0,n(Xi)}−(β^n−β0)⊤XiPβ0(Xi)]−12n(β^n−β0)⊤In(β*)n(β^n−β0)=n(β^n−β0)⊤n−1/2∑i=1nXi[1{Ai=d^θ^n,n(Xi)}−Pβ0(Xi)]−12n(β^n−β0)⊤In(β*)n(β^n−β0)+∑i=1nXi⊤β0[1{Ai=d^θ^n,n(Xi)}−1{Ai=d^θ0,n(Xi)}],
+
+where β* is a point between β^n and β0. Using the definition of a maximizer and letting u^n(θ)=n−1/2∑i=1nXi[1{Ai=d^θ,n(Xi)}−Pβ0(Xi)], we have that n(β^n−β0)=In(β*)−1u^n(θ^n) by setting ∂∂βl^n(θ^,β)|β^=0, since In(β*)→PI0 and I0 is positive definite. Next, note that u^n(θ^n)=n−1/2∑i=1nXi[1{Ai=d^θ^n,n(Xi)}−1{Ai=dθ0opt(Xi)}]+ZA,n=Gn(X[1{A=d^θ^n,n(X)}−1{A=dθ0opt(X)}])+ZA,n+nE(X[1{A=d^θ^n,n(X)}−1{A=dθ0opt(X)}])=ZA,n+nE(X[1{A=d^θ^n,n(X)}−1{A=dθ0opt(X)}]){1+oP(1)}+oP(1),
+
+where Gnf=n1/2(En−E)f(X) and ZA,n=n−1/2∑i=1n[1{Ai=dθ0opt(Xi)}−Pβ0(Xi)]. We also have 1{A=d^θ^n,n(X)}−1{A=dθ0opt(X)}=−[2⋅1{A=dθ0opt(X)}−1], which implies that nE(X[1{A=d^θ^n,n(X)}−1{A=dθ0opt(X)}])=−nE[X{2Pβ0(X)−1}1{d^θ^n,n(X)≠dθ0opt(X)}]=−nE{X{2Pβ0(X)−1}(1[0≤Dθ0(X)<−{D^θ^n,n(X)−Dθ0(X)}]=−nE{X{2Pβ0(X)−1}(1[0≤Dθ0(X)<−{D^θ^n,n(X)−Dθ0(X)}]+1[−{D^θ^n,n(X)−Dθ0(X)}≤Dθ0(X)<0])}
+
+=−nE[X{2Pβ0(X)−1}(∫0−(D^θ^n−Dθ0)f0(u)du+∫−(D^θ^n−Dθ0)0f0(u)du)‖Dθ0(X)|≤ϵn]×(1+oP(1))=−E[X{2Pβ0(X)−1}⋅|n{D^θ^n,n(X)−Dθ0(X)}||Dθ0(X)=0]f0+oP(1),
+
+for some sequence ϵn converging down to zero slowly enough. The second to last equality holds by the fact that ‖D^θ^n,n(x)−Dθ0(x)‖X=oP(1) and Assumption 10 yields that the distribution of X converges to a random variable independent of Dθ0(X) conditional on |Dθ0(X)|≤ϵn, as n goes to ∞.
+
+Note that n{D^θ^n,n(X)−Dθ0(X)}=n[ω(X;θ^n){R^Y,n(X)−RY(X)}+{1−ω(X;θ^n)}{R^Z,n(X)−RZ(X)}]+n{ω(X;θ^n)−ω(X;θ0)}{RY(X)−RZ(X)}=ω(X;θ0)ϕY(X)⊤ZY,n+{1−ω(X;θ0)}ϕZ(X)⊤ZZ,n+ω˙θ0(X){RY(X)−RZ(X)}n(θ^n−θ0){1+oP(1)}=OP(1+n‖θ^n−θ0‖),
+
+thus, ‖u^n(θ^n)‖=OP(1+n‖θ^n−θ0‖). Letting vn(θ^n,β*)=n−1/2u^n(θ^n)⊤In−1(β*)⋅u^n(θ^n), 0≤n−1/2{l^n(θ^n,β^n)−l^n(θ0,β0)}=n−1/2∑i=1nXi⊤β0[1{Ai=d^θ^n,n(X)}−1{Ai=d^θ0,n(X)}]+vn(θ^n,β∗)/2=n1/2E(X⊤β0[1{A=d^θ^n,n(X)}−1{A=d^θ0,n(X)}])+oP(1+n‖θ^n−θ0‖)=n1/2E(X⊤β0[1{A=d^θ^n,n(X)}−1{A=dθ0opt(X)}])−n1/2E(X⊤β0[1{A=d^θ0,n(X)}−1{A=dθ0opt(X)}])+oP(1+n‖θ^n−θ0‖)=−E[X⊤β0{2Pβ0(X)−1}⋅|n{D^θ^n,n(X)−Dθ0(X)}||Dθ0(X)=0]f0rn+OP(1)+oP(1+n‖θ^n−θ0‖)≤−E[X⊤β0{2Pβ0(X)−1}⋅|{RY(X)−RZ(X)}ω˙θ0(X)⊤n(θ^n−θ0)||Dθ0(X)=0]f0rn+OP(1)+oP(1+n‖θ^n−θ0‖)≤−δ12(exp(δ1)−1exp(δ1)+1)inft∈Sd{Pr[|X⊤β0|≥δ1,|{RY(X)−RZ(X)}ω˙θ0(X)⊤t|≥δ1|Dθ0(X)=0]}×n‖θ^n−θ0‖f0rn+OP(1)+oP(1+n‖θ^n−θ0‖)≤−δ2δ12(exp(δ1)−1exp(δ1)+1)n‖θ^n−θ0‖{1+oP(1)}+OP(1)+oP(1+n‖θ^n−θ0‖),
+
+where rn = 1 + oP (1). This implies that n‖θ^n−θ0‖=OP(1). From the above calculations, and the fact that the arg min or arg max of a function t ↦ g(t) does not change if we add a term that is invariant in t, we obtain that θ^n=arg mint∈ℝdMn(t), where Mn(t)=n−1/2∑i=1nXi⊤β0[1{Ai=d^t,n(X)}−1{Ai=dθ0opt(X)}]+vn(t,β*)/2.
+
+Let M(u)=β0⊤k0(ZY,ZZ,u) and U=arg minu∈ℝdM(u). We will show that Mn(θ0+u/n)⇝M(u) in ℓ∞(K) for any compact subset K of ℝd. Then, it will follow from the argmax Theorem (See chapter 14 of Kosorok, 2008) that U˜n⇝U, where U˜n=arg minu∈ℝdMn(θ0+u/n). Let hn(u)=θ0+u/n. Similar arguments along with Assumptions 11 and 10, yield that, for any compact K⊂ℝd, arg minu∈KMn{hn(u)}=arg minu∈Kn1/2E(X⊤β0[1{A=d^hn(u),n(X)}−1{A=dθ0opt(X)}])+oP(1)=arg minu∈Kn1/2E{X⊤β0{2Pβ0(X)−1}(1[−{D^hn(u),n(X)−Dθ0(X)}≤Dθ0(X)<0]+1[0≤Dθ0(X)<−{D^hn(u),n(X)−Dθ0(X)}])}+oP(1)=arg minu∈KE[X⊤β0{2Pβ0(X)−1}|n{D^hn(u),n(X)−Dθ0(X)}||Dθ0(X)=0]f0+oP(1),
+
+However, n{D^hn(u),n(X)−Dθ0(X)}⇝ω(X;θ0)ϕY(X)⊤ZY+{1−ω(X;θ0)}ϕZ(X)⊤ZZ+R0(X)ω˙θ0(X)⊤u
+
+uniformly over X when X has its conditional distribution given Dθ0(X)=0. By applying continuous mapping theorem, this implies that Mn(θ+u/n)⇝M(u) in ℓ∞(K) as desired and thus U˜n⇝U. It is straightforward to verify the remaining conclusions of the theorem using previous arguments.■
+
+Proof [Proof of Theorem 14] Using the assumptions, the fact that both n(θ^n−θ0)=OP(1) and n(β^n−β0)=OP(1), and standard arguments, we obtain that, for any compact K1⊂ℝq, sup(ZY⊤,ZZ⊤)⊤∈K1‖T˜n{x,Z˜Y(ZY,ZZ),Z˜Z(ZY,ZZ)}−T0(x,ZY,ZZ)‖X=OP(1), where (Z˜Y(ZY,ZZ)Z˜Z(ZY,ZZ))=Σ^11/2Σ1−1/2(ZYZZ),
+
+Σ1 is the upper left q × q block of Σ0, and also T0(x, ZY, ZZ) = ω(x; θ0)ϕY (x)⊤ZY + {1 − ω(x; θ0)}ϕZ(x)⊤ZZ. Furthermore, ‖{R^Y,n(x)−R^Z,n(x)}ω˙θ^n(x)⊤u−{RY(x)−RZ(x)}ω˙θ0(x)⊤u‖X≤‖‖{R^Y,n(x)−R^Z,n(x)}ω˙θ^n(x)−{RY(x)−RZ(x)}ω˙θ0(x)‖‖X⋅‖u‖=OP(n−1/2)‖u‖
+
+‖D^θ^n,n(x)−Dθ0(x)‖X=OP(n−1/2), and ‖Pβ^n(x)−Pβ0(x)‖X=OP(n−1/2). Thus, (9) sup(ZY⊤,ZZ⊤)⊤∈K1En[‖X‖⋅|{2Pβ^n(X)−1}T˜n{X,Z˜Y(ZY,ZZ),Z˜Z(ZY,ZZ)}|1hnϕ0{D^θ^n,n(X)hn}]≤OP(1)En[1hnϕ0{D^θ^n,n(X)hn}].
+
+However, En(1hn[ϕ0{D^θ^n,n(X)hn}−ϕ0{Dθ0(X)hn}])=En[1hn3∫01{(1−s)Dθ0(X)+sD^θ^n,n(X)}ϕ0{(1−s)Dθ0(X)+sD^θ^n,n(X)hn}⋅ds{D^θ^n,n(X)−Dθ0(X)}]=OP(1hn3n1/2)⋅En[∫01{(1−s)Dθ0(X)+sD^θ^n,n(X)}ϕ0{(1−s)Dθ0(X)+sD^θ^n,n(X)hn}ds]=OP(1hn3n1/2)OP(hn)=OP(1hn2n1/2)=oP(1),
+
+since |uϕ0(u)|≤(2π)−1/2e−1<∞. Now, since  E[hn−1ϕ0{Dθ0(X)/hn}]→Pf0, we have that (9) is equal to OP (1). Thus, if ‖un‖→∞, (10) β^n⊤k˜n(Z˜Y,Z˜Z,un)≥En[β^n⊤X{2Pβ^n(X)−1}⋅|{R^Y,n(X)−R^Z,n(X)}ω˙θ^n(X)⊤un|⋅1hnϕ0{D^θ^n,n(X)hn}]−OP(1),
+
+where the OP (1) is uniform over K1. Thus, up to the OP (1) added on the right-hand side, (10)≥‖un‖⋅inft∈SdEn[β^n⊤X{2Pβ^n(X)−1}|{R^Y,n(X)−R^Z,n(X)}ω˙θ^n(X)⊤t|1hnϕ0{D^θ^n,n(X)hn}]≥un(oP(1)+inft∈SdE[β0⊤X{2Pβ0(X)−1}|{RY(X)−RZ(X)}ω˙θ0(X)⊤t|1hnϕ0{Dθ0(X)hn}])=‖un‖⋅(oP(1)+inft∈SdE[β0⊤X{2Pβ0(X)−1}|{RY(X)−RZ(X)}ω˙θ0(X)⊤t||Dθ0(X)=0]f0)≥‖un‖[oP(1)+δ2δ12{exp(δ1)−1exp(δ1)+1}],
+
+with the expectation over X. Let U^n(ZY,ZZ)=arg minu∈ℝdβ^n⊤k˜n{Z˜Y(ZY,ZZ),Z˜Z(ZY,ZZ),u}, where, if the arg min set has more than one element, one can be chosen randomly or algorithmically. Since the OP (1) above is uniform over K1, we conclude that (11) sup(ZY⊤,ZZ⊤)⊤∈K1‖U^n(ZY,ZZ)‖=OP(1).
+
+Now, let K2 be any compact subset of ℝd. Previous and standard arguments give us that sup(ZY⊤,ZZ⊤)⊤∈K1supu∈K2‖k˜n{Z˜Y(ZY,ZZ),Z˜Z(ZY,ZZ),u}−k0(ZY,ZZ,u)‖=oP(1). Thus, we also have that (12) sup(ZY⊤,ZZ⊤)⊤∈K1supu∈K2‖β^n⊤k˜n{Z˜Y(ZY,ZZ),Z˜Z(ZY,ZZ),u}−β0⊤k0(ZY,ZZ,u)‖=oP(1).
+
+Define U0(ZY,ZZ)=arg maxu∈ℝdβ0⊤k0(ZY,ZZ,u). Previous arguments yield that (13) sup(ZY⊤,ZZ⊤)⊤∈K1‖U0(ZY,ZZ)‖=O(1).
+
+By Assumption 11, the arg min for each (ZY⊤,ZZ⊤)⊤∈K1 is unique. Fix ϵ > 0. By (11), there exists an m2 < ∞ such that Pr(sup(ZY⊤,ZZ⊤)⊤∈K1‖U^n(ZY,ZZ)‖<m2)≥1−ϵ for all n large enough. By (13), we can enlarge m2 such that sup(ZY⊤,ZZ⊤)⊤∈K1‖U0(ZY,ZZ)‖<m2<∞.
+
+We can also find an m1 < ∞ such that K1⊂Km1q as defined in Corollary 17. It is straightforward to show that (1) and (3) in Corollary 17 are satisfied by f(Z,u)=β0⊤k0(ZY,ZZ,u), where Z=(ZY⊤,ZZ⊤)⊤. Let fn(Z,u)=β^n⊤k˜n(ZY,ZZ,u). Standard arguments and the given assumptions yield that there exists a w1 < ∞ such that supZ∈Km1qsupu∈Km2d|fn(Z,u)|<w1 almost surely and supZ1,Z2∈Km1q:‖Z1−Z2‖<δ‖fn(Z1,u)−fn(Z2,u)‖Km2d<w1δ
+
+for all δ > 0 and all n ≥ 1 almost surely. Every subsequence in (12) has a further subsequence n″ on which the convergence in probability to zero can be replaced with almost sure convergence. Thus, (2) and (4) of Corollary 17 apply, using the fact that minimizing is equivalent to maximizing after a change in sign. Setting U^n*(ZY,ZZ)=arg minu∈Km2dβ^n⊤ k˜n{Z˜Y(ZY,ZZ),Z˜Z(ZY,ZZ),u}, Corollary 17 now yields that sup(ZY⊤,ZZ⊤)⊤∈Km1q‖U^n″*(ZY,ZZ)−U0(ZY,ZZ)‖→0
+
+almost surely. Since this is true for every subsequence, we have that sup(ZY⊤,ZZ⊤)⊤∈Km1q‖U^n*(ZY,ZZ)−U0(ZY,ZZ)‖→P0
+
+as n → ∞. Note that, on K2, U^n*(ZY,ZZ)=U^n(ZY,ZZ) for all (ZY⊤,ZZ⊤)⊤∈Km1q. Hence, lim supn→∞Pr {sup(ZY⊤,ZZ⊤)⊤∈Km1q‖U^n(ZY,ZZ)−U0(ZY,ZZ)‖>ϵ}≤lim sup n→∞[Pr {U^n(ZY,ZZ)∈K2,sup(ZY⊤,ZZ⊤)⊤∈Km1q‖U^n*(ZY,ZZ)−U0(ZY,ZZ)‖≥ϵ}+Pr{U^n(ZY,ZZ)∈K2c}]≤ϵ.
+
+Since ϵ was arbitrary, we obtain that sup(ZY⊤,ZZ⊤)⊤∈Km1q‖U^n(ZY,ZZ)−U0(ZY,ZZ)‖=oP(1).
+
+Let BL(B) be the space of all Lipschitz continuous functions mapping B→ℝ which are bounded by 1 and which have Lipschitz constant 1. Let EZ be expectation with respect to Z0*=(ZY*,ZZ*,ZA*⊤)⊤~N(0,Σ0). Let B0(Z0*)=I0−1[ZA*−k0{ZY*,ZZ*, U˜n(Z0*)}] and let f∈BL(ℝd+p). Then, using U˜n and B˜n as defined in the statement of the theorem, |EZ[f{U˜n(Z0*),B˜n(Z0*)}−f{U0(Z0*),B0(Z0*)}]|≤|EZ[f{U˜n(Z0*),B˜n(Z0*)}−f{U0(Z0*),B˜n(Z0*)}]|+|EZ[f{U0(Z0*),B˜n(Z0*)}−f{U0(Z0*),B0(Z0*)}]|=|EZ[f1{U˜n(Z0*)}−f1{U0(Z0*)}]|+|EZ[f2{B˜n(Z0*)}−f2{B0(Z0*)}]|
+
+for some other f1∈BL(ℝd) and f2∈BL(ℝp). Hence, supf∈BL(ℝd+p)|EZf{U˜n(Z0*),B˜n(Z0*)}−EZf{U0(Z0*),B0(Z0*)}|≤supf∈BL(ℝd)|EZf{U˜n(Z0*)}−EZf{U0(Z0*)}|+supf∈BL(ℝp)|EZf{B˜n(Z0*)}−EZf{B0(Z0*)}|=An+Bn,
+
+where we define both An=supf∈BL(ℝd)|EZf{U˜n(Z0*)}−EZf{U0(Z0*)}| and Bn=supf∈BL(ℝp)|EZf{B˜n(Z0*)}−EZf{B0(Z0*)}|.
+
+Fix some compact K1⊂ℝq such that Pr{(ZY*⊤,ZZ*)⊤∈K1}≥1−ϵ. Then, supf∈BL(ℝd)|EZ[f{U˜n(Z0*)}−EZf{U0(Z0*)}]|≤supf∈BL(ℝd)|EZ1(Z0*∈K1)f{U˜n(Z0*)}−EZ1(Z0*∈K1)f{U0(Z0*)}|+2EZ1(Z0*∈K1)=oP(1)+2ϵ,
+
+which implies that An = oP (1) since was arbitrary. For K2⊂ℝq+p such that Pr(Z0*∈K2)≥1−ϵ, previous arguments yield that supZ0*∈K2‖B˜n(Z0*)−B0(Z0*)‖=oP(1).
+
+As before, we can argue that Bn = oP (1) + 2ϵ, which implies that Bn = oP (1) since ϵ was arbitrary. The result follows.■
+
+Theorem 16 Let H be a compact set in a metric space with metric d and let F be a compact subset of C[H] with respect to the uniform norm, ∥ · ∥H. For each f∈F, let u(f)=arg maxh∈Hf(h), where, when the arg max is not unique, we select one element of the arg max set either randomly or algorithmically. Suppose also that there exists a closed F1⊂F for which each f∈F1 has a unique maximum. Then, limδ↓0supf∈F1supg∈F:‖f−g‖H<δd{u(f),u(g)}=0.
+
+Proof [Proof of Theorem 16] Fix ϵ > 0. For each f∈F1, there exists δf > 0 such that suph∈H∩Bϵ{u(f)}cf(h)<f{u(f)}−2δf,
+
+where Bϵ(u) is the open d-ball of radius ϵ around u. This follows since the compactness of F ensures that all f∈F are continuous. Let g∈F be such that ∥f – g∥H < δf. Then, f {u(g)} > g {u(g)} − δf ≥ g {u(f)} − δf > f {u(f)} − 2δf, which implies that d{u(g), u(f)} < ϵ. We have that ∪f∈F1{g∈F:‖g−f‖H<δf} is an open cover of F1. Since F1 is compact, there exists a set F1ϵ such that F1ϵ is finite and ∪f∈F1ϵ{g∈F:‖g−f‖H<δf}
+
+still covers F1. Let {fn}∈F and {gn}∈F be sequences such that ∥fn − gn∥ → 0. By compactness, every subsequence has a further subsequence n″ such that fn′′→f0∈F1 and gn′′→g0∈F so that both f0 and g0 are in a set of the form {g∈F:‖g−f‖H<δf} for some f∈F1ϵ. This implies that d{u(g0), u(f0)} < ϵ. Since the subsequence was arbitrary, we have that lim supn→∞d{u(gn), u(fn)} ≤ ϵ. Since ϵ was arbitrary, we now have that lim supn→∞d{u(gn), u(fn)} = 0 for any sequences {fn}∈F1 and {gn}∈F such that ∥fn − gn∥ → 0. This proves the result.■
+
+Corollary 17 For m1 < ∞, let Km1q={z∈ℝq:‖z‖≤m1}. Let (z, u) ↦ f(z, u) and (z, u) ↦ fn(z, u) be a fixed function and a sequence of functions, respectively, from Km1q×ℝd to ℝ. Suppose there exists m2 < ∞ such that for each z∈Km1q, u(z)=arg maxu∈ℝdf(z,u)<m2 and is uniquely defined. Suppose also that un(z)=arg maxu∈ℝdfn(z,u)<m2 for all n large enough, where we allow the arg max to be non-unique, but we randomly or algorithmically select one element from the arg max set. Define Km2d similarly to Km1q and assume that supz∈Km1qsupu∈Km2d|f(z,u)|<∞
+
+lim supn→∞supz∈Km1qsupu∈Km2d|fn(z,u)|<∞
+
+limδ↓0supz1,z2∈Km1q:‖z1−z2‖<δ‖f(z1,⋅)−f(z2,⋅)‖Km2d=0
+
+limδ↓0supz1,z2∈Km1q:‖z1−z2‖<δ‖fn(z1,⋅)−fn(z2,⋅)‖Km2d=0
+
+for all n large enough. Then, provided supz∈Km1q‖fn(z,⋅)−f(z,⋅)‖Km2d→0, supz∈Km1q‖un(z)−u(z)‖→0,
+
+as n → ∞.
+
+Proof [Corollary 17] By the Arzelà–Ascoli Theorem, there exists a compact K ⊂ C[H] for H=Km2d, such that both f(z,·) ∈ K and fn(z,·) ∈ K, for all z∈Km1q and all n large enough. If we let F1={f(z,⋅):z∈Km1q}, we can directly apply Theorem 16 to obtain that limδ↓0supz∈Km1qsupg∈K:‖g−f(z,⋅)‖H<δ‖u(g)−u{f(z,⋅)}‖H=0.
+
+Because supz∈Km1q‖fn(z,⋅)−f(z,⋅)‖Km2d<δ for all n large enough, the result follows.■
+
+Proof [Remark 6.] We require estimation be restricted to parameters (β, θ) which satisfy Pβ {A = dθ(X)|X} > 1/2 with probability one. Suppose towards a contradiction that such a set of parameters also satisfies Pβ(X)1{A=dθ(X)}{1−Pβ(X)}1−1{A=dθ(X)}=Pβ0(X)1{A=dθ0(X)}{1−Pβ0(X)}1−1{A=dθ0(X)}   a.s.,
+
+where Pβ(x) = expit(x⊤β). For any (x, a) such that a=dθ(x)≠dθ0(x) and it follows that Pβ(x)=P−β0(x)<Pβ0(x)=P−β(x) which contradicts the restriction that the probability of recommending an optimal treatment exceeds 1/2. Thus, it follows that dθ(x)=dθ0(x) for almost all x. This in turn implies that Pβ(x)=Pβ0(x) for almost all x from which it follows that β = β0 provided EXX⊤ is full rank.■
+
+Appendix B: Three or More Outcomes
+
+Assume the available data consist of (Xi, Ai, Y1,i, …, YK,i), i = 1, …, n, which comprise n independent and identically distributed copies of (X, A, Y1, …, YK), where X and A are as defined previously, and Y1, …, YK are outcomes, with each outcome coded so that higher values are better. Assume there exists an unknown utility function U = u(Y1, …, YK), where u:ℝK→ℝ, such that u(y1, …, yK) quantifies the “goodness” of the outcome vector (y1, …, yK). As before, let U*(d) be the potential utility under a treatment regime d. Let dUopt be the optimal regime for the utility defined by u, i.e., EU*(dUopt)≥EU*(d) for any regime d. The goal is to estimate the utility function and the associated optimal regime in the presence of more than two outcomes.
+
+To begin, we assume that the utility function is constant across patients and takes the form u(y1,…,yK;ω)=∑k=1K−1ωkyk+(1−∑k=1K−1ωk)yK, where ω = (ω1, …, ωK−1) is a vector of parameters with ∑k=1K−1ωk≤1 and ωk ≥ 0 for k = 1, …, K − 1. Thus, we assume that the utility function is a convex combination of the set of outcomes. Let dωopt be the optimal regime for the utility defined by ω. Assume that there exists a true utility function defined by some ω0 = (ω1,0, …, ωK−1,0) such that observed decisions were made with the intent to maximize U = u(y1, …, yK; ω0). Further assume that treatment decisions in the observed data follow Pr{A=dω0opt(x)|X=x}=expit(x⊤β), where β is an unknown parameter.
+
+Define QYk(x,a)=E(Yk|X=x,A=a), for k = 1, …, K. Define also Qω(x,a)=E{u(Y1,…,YK;ω)|X=x,A=a}
+
+and note that Qω(x,a)=∑k=1K−1ωkQYk(x,a)+(1−∑k=1K−1ωk)QYK(x,a). The Q-functions for each outcome can be estimated from the observed data using regression models. Let Q^Yk,n(x,a) denote an estimator for QYk(x,a). Then, an estimator for Qω(x, a) is Q^ω,n(x,a)=∑k=1K−1ωkQ^Yk,n(x,a)+(1−∑k=1K−1ωk)Q^YK,n(x,a). For any fixed ω, we can compute an estimator for dωopt as d^ω,n(x)=arg maxa∈AQ^ω,n(x,a). The pseudo-likelihood is (14) L^n(ω,β)∝∏i=1nexp[Xi⊤β1{Ai=d^ω,n(Xi)}]1+exp(Xi⊤β),
+
+for a vector β and a vector ω = (ω1, …, ωK−1). For K = 2, this reduces to the formulation in Section 2. Estimators for β and ω1, …, ωK−1 can be obtained by maximizing the pseudo-likelihood in (14). Letting ω^n=(ω^1,n,…,ω^K−1,n denote the maximum pseudo-likelihood estimator for ω, an estimator for the optimal regime is d^ω^n,n(x)=arg maxa∈AQ^ω^n,n(x,a).
+
+When the number of outcomes is large, maximizing (2) using the grid search proposed in Section 2.1 is infeasible. However, we can use the Metropolis algorithm similar to that proposed for a patient-specific utility function. A patient-specific utility function can be accommodated by setting u(y1,…,yK;x,θ)=∑k=1K−1expit(x⊤θk)y1+{1−∑k=1K−1expit(x⊤θk)}yK for a vector θ=(θ1⊤,…,θK−1⊤)⊤ and maximizing the pseudo-likelihood using the Metropolis algorithm.
+
+To examine the performance of the proposed method in the presence of more than two outcomes, we use the following generative model. As before, let X = (X1, …, X5)⊤ be independent normal random variables with mean 0 and standard deviation 0.5. Let ϵ1, ϵ2 and ϵ3 be independent normal random variables with mean 0 and standard deviation 0.5. Given treatment assignment, outcomes are generated according to Y1 = A(4X1 − 2X2 + 2) + ϵ1, Y2 = A(2X1 − 4X2 − 2) + ϵ2, and Y3 = 1 + A(X1 + X2 + 1)ϵ3. For a fixed ω = (ω1, ω2) and fixed ρ ∈ [0, 1], treatment assignment is made according to Pr{A=dωopt(x)|X=x}=ρ.
+
+We set ω1 = 0.2, ω2 = 0.4, and ρ = 0.6, 0.8. Table 12 contains parameter estimates averaged across 500 replications along with standard deviations (in parentheses) across replications. The error rate is the proportion of samples in a testing set that were assigned the optimal treatment by the estimated policy. Table 13 contains estimated values (calculated by generating an independent testing set following the same generative model but with decisions made according to each policy) of the optimal policy, a policy where the utility function is estimated (the proposed method), policies estimated to maximize each outcome individually, and standard of care. The proposed method results in values close to the true optimal in large samples and larger than maximizing each individual outcome across sample sizes.
+
+Table 12: Estimation results for simulations where utility and probability of optimal treatment are fixed, with three outcomes.
+
+n	ρ	ω^1,n	ω^2,n	ρ^n	Error rate	
+100	0.60	0.21 (0.16)	0.34 (0.20)	0.63 (0.07)	0.15 (0.11)	
+	0.80	0.21 (0.07)	0.42 (0.09)	0.81 (0.04)	0.04 (0.03)	
+200	0.60	0.21 (0.13)	0.40 (0.17)	0.62 (0.04)	0.11 (0.09)	
+	0.80	0.21 (0.04)	0.41 (0.06)	0.80 (0.03)	0.03 (0.02)	
+300	0.60	0.21 (0.12)	0.39 (0.16)	0.62 (0.03)	0.09 (0.08)	
+	0.80	0.20 (0.03)	0.41 (0.04)	0.80 (0.02)	0.02 (0.01)	
+500	0.60	0.21 (0.09)	0.41 (0.12)	0.61 (0.02)	0.06 (0.05)	
+	0.80	0.20 (0.02)	0.40 (0.03)	0.80 (0.02)	0.01 (0.01)	
+
+Table 13: Value results for simulations where utility and probability of optimal treatment are fixed, with three outcomes.
+
+n	ρ	Optimal	Estimated utility	Y1 only	Y2 only	Y3 only	Standard of care	
+100	0.60	1.38 (0.04)	1.28 (0.15)	1.09 (0.06)	1.00 (0.06)	0.62 (0.10)	0.59 (0.14)	
+	0.80	1.39 (0.04)	1.37 (0.06)	1.09 (0.06)	1.00 (0.06)	0.62 (0.11)	0.99 (0.13)	
+200	0.60	1.38 (0.04)	1.32 (0.12)	1.09 (0.06)	1.00 (0.06)	0.62 (0.08)	0.60 (0.10)	
+	0.80	1.39 (0.04)	1.38 (0.05)	1.09 (0.05)	1.00 (0.06)	0.62 (0.09)	0.98 (0.09)	
+300	0.60	1.38 (0.04)	1.34 (0.10)	1.09 (0.06)	1.00 (0.06)	0.63 (0.08)	0.60 (0.08)	
+	0.80	1.38 (0.04)	1.39 (0.05)	1.10 (0.06)	1.00 (0.06)	0.63 (0.08)	0.99 (0.07)	
+500	0.60	1.39 (0.04)	1.36 (0.07)	1.09 (0.05)	1.00 (0.06)	0.62 (0.07)	0.60 (0.06)	
+	0.80	1.39 (0.04)	1.38 (0.05)	1.10 (0.06)	1.00 (0.06)	0.63 (0.07)	0.99 (0.06)	
+
+Appendix C: Misspecified Model for the Utility Function
+
+In this section, we demonstrate that the proposed method achieves reasonable performance even in the presence of a misspecified model for the utility function. Let X, Y, and Z be generated as above. Let the true underlying utility function be u(y, z; x, θ) = ω(x; θ)y + {1 − ω(x; θ)}z, where ω(x;θ)=expit(1+x12+x⊤θ0) with θ0 = (−0. 5, 0, 0, 1, 0.5)⊤. The misspecified model fit to estimate the utility function contained only an intercept, X1, X2, X3, and X4. Therefore, these simulations represent the setting where one important covariate and a squared term for one covariate are omitted from the model for the utility function. Treatment was assigned according to Pr{A=dωopt(x)|X=x}=expit(0.5+x1). Table 14 contains the estimated value when the model for the utility function is correctly specified and when the model is incorrectly specified, along with the value of the true optimal policy and the standard of care. The proposed method produces comparable results regardless of whether the utility function is misspecified or not.
+
+Table 14: First simulation results with a misspecified model for the utility function.
+
+n	Optimal	Correct	Misspecified	Standard of Care	
+100	1.86 (0.07)	1.61 (0.21)	1.64 (0.20)	0.59 (0.23)	
+200	1.85 (0.07)	1.68 (0.16)	1.69 (0.17)	0.57 (0.16)	
+300	1.86 (0.07)	1.72 (0.13)	1.74 (0.13)	0.57 (0.13)	
+500	1.86 (0.07)	1.77 (0.10)	1.76 (0.11)	0.58 (0.10)	
+
+Table 15 contains results for the same model misspecification, but where the true utility function is ω(x;θ)=expit(1+4x12+x⊤θ0) with θ0 = (−0.5, 0, 0, 1, 4)⊤, i.e., the coefficients for the components that are left out of the misspecified model are larger. When the coefficients of the components left out of the utility function model are larger, the proposed method produces better results when the model is correctly specified. However, even in the presence of model misspecification, the proposed method produces results that improve upon the standard of care.
+
+Table 15: Second simulation results with a misspecified model for the utility function.
+
+n	Optimal	Correct	Misspecified	Standard of Care	
+100	2.11 (0.08)	1.63 (0.28)	1.64 (0.23)	0.69 (0.26)	
+200	2.11 (0.08)	1.76 (0.22)	1.68 (0.18)	0.67 (0.18)	
+300	2.10 (0.07)	1.84 (0.19)	1.70 (0.16)	0.68 (0.15)	
+500	2.10 (0.08)	1.88 (0.16)	1.73 (0.15)	0.67 (0.12)	
+
+Appendix D: Misspecified Model for the Probability of Assigning the Optimal Treatment
+
+Similar to the model with the misspecified utility function, the model with the misspecified probability of the optimal treatment resulted in the values that are comparable to the correct model. X, Y and Z were generated as above. Let ω(x;θ)=expit(1+4x12+xTθ0), with θ0 = (−0.5, 0, 0, 1, 0.5) and Pr{A=dωopt|X=x}=expit(0.5+4x12+x1). For this simulation, the misspecified model for the probability of assigning the optimal treatment is assumed to not include 4X12. In Table 16, the estimated value of the model with the misspecified probability of assigning the optimal treatment is confirmed to be similar to the estimated value of the correct model.
+
+Table 16: Value results with a misspecified model for the probability of assigning the optimal treatment.
+
+n	Optimal	Correct	Misspecified	Standard of Care	
+100	2.01 (0.07)	1.90 (0.14)	1.89 (0.20)	1.29 (0.23)	
+200	2.01 (0.08)	1.96 (0.09)	1.95 (0.12)	1.29 (0.16)	
+300	2.01 (0.08)	1.97 (0.09)	1.97 (0.10)	1.29 (0.13)	
+500	2.00 (0.08)	1.98 (0.08)	1.98 (0.08)	1.30 (0.10)	
+
+In the next simulation, let ω(x; θ) = expit(1 + xTθ0) with θ0 = (−0.5, 0, 0, 1, 0.5) and the true probability of assigning the optimal treatment is Pr{A=dωopt(x)|X=x}=expit(0.5+x1) when the misspecified model is assumed as a constant. In Table 17, it is noticeable that the difference between the two estimated values is similar as in Table 16. For all settings above, the estimated value of the correct model is similar to the estimated value of the models with both the misspecified utility functions and the misspecified probability of optimal treatment.
+
+Table 17: Value results with a misspecified model for the utility function.
+
+n	Optimal	Correct	Misspecified	Standard of Care	
+100	1.76 (0.06)	1.66 (0.19)	1.67 (0.19)	0.51 (0.22)	
+200	1.76 (0.06)	1.71 (0.12)	1.71 (0.13)	0.49 (0.15)	
+300	1.76 (0.06)	1.72 (0.11)	1.74 (0.08)	0.50 (0.13)	
+500	1.76 (0.06)	1.75 (0.07)	1.75 (0.06)	0.50 (0.10)	
+
+Appendix E: Relationship between the probability of assigning the optimal treatment and the variance of the estimator of the utility
+
+Table 18: Estimates of ω across different ρs
+
+n	ω╲ρ	0.2	0.3	0.35	0.4	
+100	0.25	0.25 (0.05)	0.25 (0.09)	0.27 (0.15)	0.33 (0.24)	
+	0.75	0.75 (0.05)	0.75 (0.10)	0.74 (0.14)	0.66 (0.24)	
+200	0.25	0.25 (0.03)	0.25 (0.05)	0.25 (0.08)	0.28 (0.16)	
+	0.75	0.75 (0.03)	0.75 (0.05)	0.75 (0.09)	0.73 (0.13)	
+300	0.25	0.25 (0.02)	0.25 (0.04)	0.25 (0.07)	0.26 (0.12)	
+	0.75	0.75 (0.02)	0.75 (0.04)	0.75 (0.07)	0.73 (0.13)	
+500	0.25	0.25 (0.01)	0.25 (0.02)	0.25 (0.04)	0.25 (0.08)	
+	0.75	0.75 (0.01)	0.75 (0.03)	0.75 (0.05)	0.76 (0.08)	
+
+Table 19: Estimates of ω across different ρs
+
+n	ω╲ρ	0.6	0.65	0.7	0.8	
+100	0.25	0.34 (0.24)	0.27 (0.14)	0.25 (0.10)	0.25 (0.05)	
+	0.75	0.66 (0.24)	0.73 (0.15)	0.74 (0.10)	0.75 (0.05)	
+200	0.25	0.28 (0.16)	0.25 (0.08)	0.25 (0.05)	0.25 (0.02)	
+	0.75	0.72 (0.16)	0.75 (0.08)	0.75 (0.05)	0.75 (0.03)	
+300	0.25	0.26 (0.11)	0.25 (0.07)	0.25 (0.04)	0.25 (0.02)	
+	0.75	0.74 (0.13)	0.75 (0.07)	0.75 (0.04)	0.75 (0.02)	
+500	0.25	0.25 (0.08)	0.25 (0.04)	0.25 (0.03)	0.25 (0.01)	
+	0.75	0.75 (0.08)	0.76 (0.05)	0.75 (0.02)	0.75 (0.01)	
+
+In this section, we explore the relationship between the probability of assigning the optimal treatment and the variance of the estimator of the utility, which was mentioned in Remark 15. We empirically examine how the standard error of the estimator of the utility changes as Pr{A=dωopt(x)|X=x} varies. For simplicity, we focus on the fixed utility setting described in 4.1. Let X, Y and Z be generated as in 4.1. For each ρs, we estimate ω^ when ω = 0.25 and ω = 0.75.
+
+Table 18 and Table 19 display ω^ and s.e. (ω^) across values of n, ω, and ρ. As ρ deviates from 0.5 (so that β is not close to 0), ω^ is closer to the true ω, and the standard error of ω^ decreases. Moreover, if ω1 and ω2 satisfy ω1 = 1 − ω2, their estimates and standard errors are similar as logit(ω1) = −logit(ω2).
+
+Appendix F: Performance of Metropolis optimizer in the algorithm with the patient-specific utility.
+
+Table 20: Absolute difference and the Euclidean distance of the estimates of the patient utility and θ0
+
+n	Absolute diffrence-MH	Absolute difference-Unit ball	Distance-MH	Distance-Unit ball	
+100	1.49 (0.71)	1.66 (0.30)	0.85 (0.45)	0.86 (0.12)	
+200	1.30 (0.49)	1.60 (0.31)	0.72 (0.31)	0.84 (0.13)	
+300	1.19 (0.20)	1.63 (0.29)	0.63 (0.16)	0.86 (0.13)	
+500	1.15 (0.12)	1.63 (0.32)	0.60 (0.09)	0.85 (0.13)	
+
+In this section, we examine the performance of the Metropolis optimizer that is used in 2.2. We randomly select 10000 points in the unit ball around θ0, and use the point that yields the best likelihood as the reference for the comparison. We define θ^ by Metropolis algorithm as θ^MH, and a best point from a unit ball around θ0 as θ^Uball . We obtain the distance between θ0 and θ^MH and the distance between θ0 and θ^Uball for each of 500 replications.
+
+In Table 20, absolute difference-MH was calculated as the mean of |θ^MH−θ0|, and absolute difference-Unit ball was calculated as the mean of |θ^Uball −θ0| for 500 replications. Similarly, Distance-MH was calculated as the mean of ∑j=16(θ^MH,j−θ0,j)2, and Distance-Unit ball was calculated as the mean of ∑i=16(θ^Uball ,j−θ0,j)2 for 500 replications. The standard errors of these distances are in the parentheses.
+
+By Table 20, it is noticeable that both absolute difference and the Euclidean distance of θ^MH are smaller, and we could conclude that it is reasonable to use Metropolis algorithm when estimating a patient-specific utility.
+
+Figure 1: Box plots of log SUM-D by substance abuse and treatment.
+
+Figure 2: Box plots of log SUM-M by substance abuse and treatment.
+
+Table 1: Estimation results for simulations where utility and probability of optimal treatment are fixed.
+
+n	ω	ρ	ω^n	ρ^n	Error rate	Median(25th, 75th)	
+100	0.25	0.60	0.34 (0.24)	0.61 (0.08)	0.12 (0.13)	0.07 (0.03, 0.13)	
+			0.25 (0.05)	0.80 (0.04)	0.03 (0.02)	0.02 (0.01, 0.03)	
+	0.75	0.60	0.66 (0.24)	0.61 (0.07)	0.12 (0.13)	0.07 (0.03, 0.14)	
+			0.75 (0.05)	0.80 (0.04)	0.03 (0.02)	0.02 (0.01, 0.03)	
+200	0.25	0.60	0.28 (0.16)	0.61 (0.04)	0.07 (0.08)	0.04 (0.02, 0.10)	
+			0.25 (0.02)	0.80 (0.03)	0.01 (0.01)	0.01 (0.01, 0.02)	
+	0.75	0.60	0.72 (0.16)	0.61 (0.04)	0.07 (0.09)	0.03 (0.01, 0.08)	
+			0.75 (0.03)	0.80 (0.03)	0.01 (0.01)	0.01 (0.01, 0.02)	
+300	0.25	0.60	0.26 (0.11)	0.61 (0.03)	0.05 (0.06)	0.03 (0.01, 0.06)	
+			0.25 (0.02)	0.80 (0.02)	0.01 (0.01)	0.01 (0.00, 0.01)	
+	0.75	0.60	0.74 (0.13)	0.61 (0.03)	0.06 (0.07)	0.03 (0.01, 0.08)	
+			0.75 (0.02)	0.80 (0.02)	0.01 (0.01)	0.01 (0.01, 0.01)	
+500	0.25	0.60	0.25 (0.08)	0.61 (0.02)	0.04 (0.04)	0.02 (0.01, 0.04)	
+			0.25 (0.01)	0.80 (0.02)	0.01 (0.01)	0.01 (0.00, 0.01)	
+	0.75	0.60	0.75 (0.08)	0.61 (0.02)	0.04 (0.04)	0.02 (0.01, 0.05)	
+			0.75 (0.01)	0.80 (0.02)	0.01 (0.01)	0.01 (0.00, 0.01)	
+
+Table 2: Value results for simulations where utility and probability of optimal treatment are fixed.
+
+n	ω	ρ	Optimal	Estimated ω	Y only	Z only	Standard of care	
+100	0.25	0.60	1.90 (0.07)	1.70 (0.38)	0.38 (0.11)	1.76 (0.08)	0.37 (0.24)	
+			1.90 (0.07)	1.89 (0.07)	0.39 (0.12)	1.76 (0.08)	1.14 (0.21)	
+	0.75	0.60	1.90 (0.06)	1.71 (0.37)	1.76 (0.08)	0.39 (0.12)	0.37 (0.23)	
+			1.90 (0.06)	1.89 (0.07)	1.76 (0.08)	0.39 (0.12)	1.14 (0.21)	
+200	0.25	0.60	1.90 (0.07)	1.82 (0.21)	0.39 (0.11)	1.76 (0.07)	0.39 (0.16)	
+			1.90 (0.07)	1.90 (0.06)	0.39 (0.11)	1.76 (0.07)	1.14 (0.14)	
+	0.75	0.60	1.90 (0.07)	1.82 (0.22)	1.76 (0.07)	0.38 (0.11)	0.39 (0.17)	
+			1.90 (0.07)	1.90 (0.06)	1.76 (0.07)	0.38 (0.11)	1.14 (0.15)	
+300	0.25	0.60	1.90 (0.07)	1.86 (0.13)	0.39 (0.11)	1.76 (0.07)	0.38 (0.14)	
+			1.90 (0.07)	1.89 (0.06)	0.39 (0.11)	1.76 (0.07)	1.14 (0.12)	
+	0.75	0.60	1.90 (0.06)	1.85 (0.17)	1.77 (0.07)	0.38 (0.11)	0.38 (0.14)	
+			1.90 (0.06)	1.90 (0.07)	1.77 (0.07)	0.38 (0.11)	1.13 (0.12)	
+500	0.25	0.60	1.90 (0.06)	1.88 (0.10)	0.39 (0.10)	1.76 (0.07)	0.38 (0.10)	
+			1.90 (0.06)	1.90 (0.07)	0.39 (0.11)	1.76 (0.07)	1.14 (0.09)	
+	0.75	0.60	1.89 (0.07)	1.88 (0.08)	1.77 (0.07)	0.39 (0.11)	0.38 (0.11)	
+			1.89 (0.07)	1.90 (0.07)	1.77 (0.07)	0.39 (0.11)	1.14 (0.09)	
+
+Table 3: Estimation results for simulations where utility is fixed and probability of optimal treatment is variable.
+
+n	ω	ω^n	RMSE of β^n	Error rate	Median(25th, 75th)	
+100	0.25	0.34 (0.23)	1.32 (0.50)	0.10 (0.14)	0.04 (0.02, 0.10)	
+	0.75	0.71 (0.21)	1.37 (0.48)	0.10 (0.11)	0.06 (0.03, 0.12)	
+200	0.25	0.27 (0.13)	0.81 (0.30)	0.04 (0.08)	0.02 (0.01, 0.03)	
+	0.75	0.75 (0.15)	0.85 (0.29)	0.07 (0.07)	0.04 (0.02, 0.10)	
+300	0.25	0.26 (0.09)	0.60 (0.21)	0.03 (0.05)	0.01 (0.01, 0.02)	
+	0.75	0.75 (0.10)	0.63 (0.22)	0.04 (0.05)	0.03 (0.01, 0.07)	
+500	0.25	0.25 (0.03)	0.44 (0.14)	0.01 (0.01)	0.01 (0.00, 0.01)	
+	0.75	0.76 (0.07)	0.46 (0.16)	0.03 (0.04)	0.02 (0.01, 0.04)	
+
+Table 4: Value results for simulations where utility is fixed and probability of optimal treatment is variable.
+
+n	ω	Optimal	Estimated ω	Y only	Z only	Standard of care	
+100	0.25	1.90 (0.07)	1.72 (0.40)	0.39 (0.12)	1.76 (0.07)	0.33 (0.23)	
+	0.75	1.90 (0.06)	1.75 (0.30)	1.76 (0.08)	0.39 (0.12)	0.56 (0.23)	
+200	0.25	1.90 (0.06)	1.85 (0.23)	0.37 (0.11)	1.76 (0.07)	0.34 (0.16)	
+	0.75	1.89 (0.06)	1.83 (0.18)	1.76 (0.07)	0.38 (0.11)	0.58 (0.16)	
+300	0.25	1.90 (0.06)	1.88 (0.16)	0.39 (0.10)	1.77 (0.07)	0.33 (0.14)	
+	0.75	1.90 (0.06)	1.87 (0.08)	1.76 (0.07)	0.40 (0.11)	0.57 (0.13)	
+500	0.25	1.90 (0.07)	1.89 (0.06)	0.39 (0.10)	1.76 (0.07)	0.33 (0.11)	
+	0.75	1.90 (0.07)	1.88 (0.07)	1.77 (0.07)	0.39 (0.11)	0.58 (0.10)	
+
+Table 5: Estimation results for simulations where both utility and probability of optimal treatment are variable.
+
+n	RMSE of θ^n	RMSE of β^n	Error rate	Median(25th, 75th)	
+100	0.85 (0.45)	1.28 (0.46)	0.10 (0.08)	0.06 (0.04, 0.13)	
+200	0.72 (0.31)	0.81 (0.27)	0.07 (0.06)	0.05 (0.04, 0.08)	
+300	0.63 (0.16)	0.63 (0.21)	0.05 (0.04)	0.04 (0.03, 0.06)	
+500	0.60 (0.09)	0.46 (0.15)	0.05 (0.02)	0.04 (0.03, 0.05)	
+
+Table 6: Value results for simulations where both utility and probability of optimal treatment are variable.
+
+n	Optimal	Estimated ω	Y only	Z only	Standard of care	
+100	1.74 (0.06)	1.65 (0.14)	1.66 (0.06)	1.41 (0.08)	0.50 (0.21)	
+200	1.74 (0.06)	1.69 (0.11)	1.67 (0.06)	1.41 (0.08)	0.49 (0.15)	
+300	1.74 (0.06)	1.71 (0.07)	1.66 (0.06)	1.41 (0.07)	0.50 (0.13)	
+500	1.74 (0.06)	1.71 (0.07)	1.66 (0.06)	1.41 (0.08)	0.50 (0.11)	
+
+Table 7: Power of bootstrap test for homogeneity of utility function
+
+n	Type 1 error	Power against H1	Power against H2	Stability	
+100	0.002	0.238	0.264	0.805	
+200	0.004	0.790	0.782	0.831	
+300	0.004	0.958	0.948	0.833	
+500	0.002	0.998	0.990	0.829	
+
+Table 8: Results of analysis of STEP-BD data for SUM-D and SUM-M.
+
+Policy	SUM-D	SUM-M	Value (% improvement)	ω^n	ρ^n	
+fixed-fixed	2.336	0.857	1.8%	0.039	0.431	
+fixed-variable	2.324	0.838	3.9%	0.039	0.440	
+variable-variable	2.321	0.804	8.3%	0.334	0.448	
+standard of care	2.480	0.868	0.0%	·	·	
+
+Table 9: Estimates of θ^n in the variable-variable policy
+
+	Intercept	Age	Substance	Mood elevation	Insurance	Race	
+Estimate	2.427	−.177	−1.666	−2.632	4.263	1.078	
+Standard error	3.039	0.953	2.746	2.238	3.241	3.274	
+
+Table 10: Results of analysis of STEP-BD data for SUM-D and Side effect score.
+
+Policy	SUM-D	Side effect score	Value (% improvement)	ω^n	ρ^n	
+fixed-fixed	2.377	0.156	5.2%	0.601	0.462	
+fixed-variable	2.384	0.159	5.7%	0.100	0.472	
+variable-variable	2.430	0.161	6.1%	0.378	0.487	
+standard of care	2.480	0.172	0.0%	·	·	
+
+Table 11: Estimates of θ^n in the variable-variable policy
+
+	Intercept	Age	Substance	Mood	Irritable	Anxiety	Insurance	Race	
+Estimate	−3.125	−4.614	2.094	−0.609	2.594	0.332	−3.493	−2.563	
+Standard error	2.257	2.300	2.395	2.603	2.610	2.538	2.599	2.449	
+
+1. Nevertheless, one could imagine how these flexible estimators could integrated into our framework to reduce dependence on parametric models. See concluding remarks for additional discussion.
+
+2. We gratefully acknowledge an anonymous referee for identifying this connection.
+==== Refs
+References
+
+Abbeel Pieter and Ng Andrew Y . Apprenticeship learning via inverse reinforcement learning. In Proceedings of the Twenty-first International Conference on Machine Learning. ACM, 2004.
+Benkeser David , Mertens Andrew , Colford John M , Hubbard Alan , Arnold Benjamin F , Stein Aryeh , and van der Laan Mark J . A machine learning-based approach for estimating and testing associations with multivariate outcomes. The international journal of biostatistics, 1 (ahead-of-print ), 2020.
+Blatt D , Murphy SA , and Zhu J . A-learning for approximate planning. Ann Arbor, 1001 : 48109–2122, 2004.
+Butler Emily L , Laber Eric B , Davis Sonia M , and Kosorok Michael R . Incorporating patient preferences into estimation of optimal individualized treatment rules. Biometrics, 74 (1 ): 18–26, 2018.28742260
+Carlsson Fredrik and Martinsson Peter . Design techniques for stated preference methods in health economics. Health economics, 12 (4 ):281–294, 2003.12652515
+Collins Francis S and Varmus Harold . A new initiative on precision medicine. New England Journal of Medicine, 372 (9 ):793–795, 2015.25635347
+de Bekker-Grob Esther W , Ryan Mandy , and Gerard Karen . Discrete choice experiments in health economics: a review of the literature. Health economics, 21 (2 ):145–172, 2012.22223558
+Evans Elizabeth A and Sullivan Maria A . Abuse and misuse of antidepressants. Substance Abuse and Rehabilitation, 5 :107–120, 2014.25187753
+Gan TJ , Lubarsky DA , Flood EM , Thanh T , Mauskopf J , Mayne T , and Chen C . Patient preferences for acute pain treatment. British Journal of Anaesthesia, 92 (5 ):681–688, 2004.15003986
+Geyer Charles J. and Johnson Leif T. . mcmc: Markov Chain Monte Carlo, 2017. URL https://CRAN.R-project.org/package=mcmc. R package version 0.9–5.
+Ghaemi S Nassir . Why antidepressants are not antidepressants: STEP-BD, STAR*D, and the return of neurotic depression. Bipolar Disorders, 10 (8 ):957–968, 2008.19594510
+Goldberg Joseph F . The modern pharmacopoeia: A return to depressive realism? Bipolar Disorders, 10 (8 ):969–972, 2008.19594511
+Hamburg Margaret A and Collins Francis S . The path to personalized medicine. New England Journal of Medicine, 2010 (363 ):301–304, 2010.
+Henderson Robin , Ansell Phil , and Alshibani Deyadeen . Regret-regression for optimal dynamic treatment regimes. Biometrics, 66 (4 ):1192–1201, 2010.20002404
+Hernan Miguel A and Robins James M . Causal Inference. CRC Boca Raton, FL, 2010.
+Judd Lewis L , Akiskal Hagop S , Schettler Pamela J , Endicott Jean , Maser Jack , Solomon David A , Leon Andrew C , Rice John A , and Keller Martin B . The long-term natural history of the weekly symptomatic status of bipolar I disorder. Archives of General Psychiatry, 59 (6 ):530–537, 2002.12044195
+Kalman Rudolf Emil . When is a linear control system optimal? Journal of Basic Engineering, 86 (1 ):51–60, 1964.
+Kinter Elizabeth Timberlake . Identifying Treatment Preferences of Patients with Schizophrenia in Germany: An Application of Patient-centered Care. PhD thesis, Johns Hopkins University, 2009.
+Kosorok Michael R and Laber Eric B . Precision medicine. Annual review of statistics and its application, 6 :263–286, 2019.
+Kosorok Michael Rene . Introduction to Empirical Processes and Semiparametric Inference. Springer, New York, 2008.
+Laber Eric B , Linn Kristin A , and Stefanski Leonard A . Interactive model building for Q-learning. Biometrika, 101 (4 ):831–847, 2014a.25541562
+Laber Eric B , Lizotte Daniel J , and Ferguson Bradley . Set-valued dynamic treatment regimes for competing outcomes. Biometrics, 70 (1 ):53–61, 2014b.24400912
+Laber Eric B , Wu Fan , Munera Catherine , Lipkovich Ilya , Colucci Salvatore , and Ripa Steve . Identifying optimal dosage regimes under safety constraints: An application to long term opioid treatment of chronic pain. Statistics in medicine, 37 (9 ):1407–1418, 2018.29468702
+Linn Kristin A , Laber Eric B , and Stefanski Leonard A . Estimation of dynamic treatment regimes for complex outcomes: Balancing benefits and risks. In Adaptive Treatment Strategies in Practice: Planning Trials and Analyzing Data for Personalized Medicine, pages 249–262. SIAM, 2015.
+Lizotte Daniel J and Laber Eric B . Multi-objective Markov decision processes for data-driven decision support. Journal of Machine Learning Research, 17 (211 ):1–28, 2016.
+Lizotte Daniel J , Bowling Michael , and Murphy Susan A . Linear fitted-Q iteration with multiple reward functions. Journal of Machine Learning Research, 13 :3253–3295, 2012.23741197
+Mombaur K , Truong A , and Laumond J-P . Identifying the objectives of human path generation. Computer Methods in Biomechanics and Biomedical Engineering, 12 :189–191, 2009.
+Moodie Erica EM , Richardson Thomas S , and Stephens David A . Demystifying optimal dynamic treatment regimes. Biometrics, 63 (2 ):447–455, 2007.17688497
+Moodie Erica EM , Chakraborty Bibhas , and Kramer Michael S . Q-learning for estimating optimal dynamic treatment rules from observational data. Canadian Journal of Statistics, 40 (4 ):629–645, 2012.
+Moser Elizabeth Charlotte , Hoffe Sarah E , Frakes Jessica , Aguilera Todd Anthony , Karim Mona , Elizabeth Colbert Lauren , Moningi Shalini , David Tzeng Ching-Wei , Thall Peter F , Pant Shubham , Adaptive dose optimization trial of stereotactic body radiation therapy (sbrt) with or without gc4419 (avasopasem manganese) in pancreatic cancer., 2020.
+Murphy Susan A . Optimal dynamic treatment regimes. Journal of the Royal Statistical Society, Series B, 65 (2 ):331–355, 2003.
+Murphy Susan A . A generalization error for Q-learning. Journal of Machine Learning Research, 6 :1073–1097, 2005.16763665
+Murphy Susan A , van der Laan Mark J , Robins James M , and Conduct Problems Prevention Research Group. Marginal mean models for dynamic regimes. Journal of the American Statistical Association, 96 (456 ):1410–1423, 2001.20019887
+Murray Thomas A , Thall Peter F , and Yuan Ying . Utility-based designs for randomized comparative trials with categorical outcomes. Statistics in medicine, 35 (24 ):4285–4305, 2016.27189672
+Ng Andrew Y , Russell Stuart J , Algorithms for inverse reinforcement learning. In ICML, pages 663–670, 2000.
+Qian Min and Murphy Susan A . Performance guarantees for individualized treatment rules. Annals of Statistics, 39 (2 ):1180, 2011.21666835
+Ratliff Nathan D , Bagnell J Andrew , and Zinkevich Martin A . Maximum margin planning. In Proceedings of the 23rd International Conference on Machine Learning, pages 729–736. ACM, 2006.
+Robins James , Orellana Liliana , and Rotnitzky Andrea . Estimation and extrapolation of optimal treatment and testing strategies. Statistics in Medicine, 27 (23 ):4678–4721, 2008.18646286
+Robins James M . Testing and estimation of direct effects by reparameterizing directed acyclic graphs with structural nested models. Computation, causation, and discovery, pages 349–405, 1999.
+Robins James M . Optimal structural nested models for optimal sequential decisions. In Proceedings of the Second Seattle Symposium in Biostatistics, pages 189–326. Springer, 2004.
+Rosenbaum Paul R . From association to causation in observational studies: The role of tests of strongly ignorable treatment assignment. Journal of the American Statistical Association, 79 (385 ):41–48, 1984.
+Rosenbaum Paul R and Rubin Donald B . Assessing sensitivity to an unobserved binary covariate in an observational study with binary outcome. Journal of the Royal Statistical Society, Series B, 45 (2 ):212–218, 1983.
+Rubin Daniel B and van der Laan Mark J . Statistical issues and limitations in personalized medicine research with clinical trials. The International Journal of Biostatistics, 8 (1 ), 2012.
+Rubin Donald B . Randomization analysis of experimental data: The fisher randomization test comment. Journal of the American statistical association, 75 (371 ):591–593, 1980.
+Ryan Mandy , Gerard Karen , and Amaya-Amaya Mabel . Using discrete choice experiments to value health and health care, volume 11 . Springer Science & Business Media, 2007.
+Sachs Gary S , Nierenberg Andrew A , Calabrese Joseph R , Marangell Lauren B , Wisniewski Stephen R , Gyulai Laszlo , Friedman Edward S , Bowden Charles L , Fossey Mark D , Ostacher Michael J , Effectiveness of adjunctive antidepressant treatment for bipolar depression. New England Journal of Medicine, 356 (17 ):1711–1722, 2007.17392295
+Schnell Patrick , Tang Qi , Müller Peter , and Carlin Bradley P . Subgroup inference for multiple treatments and multiple endpoints in an Alzheimer’s disease treatment trial. The Annals of Applied Statistics, 11 (2 ):949–966, 2017.
+Schnell Patrick M , Tang Qi , Offen Walter W , and Carlin Bradley P . A Bayesian credible subgroups approach to identifying patient subgroups with positive treatment effects. Biometrics, 72 (4 ):1026–1036, 2016.27159131
+Schulte PJ , Tsiatis AA , Laber EB , and Davidian M . Q- and A-learning methods for estimating optimal dynamic treatment regimes. Statistical Science, 29 (4 ):640–661, 2014.25620840
+Soekhai Vikas , de Bekker-Grob Esther W , Ellis Alan R , and Vass Caroline M . Discrete choice experiments in health economics: past, present and future. Pharmacoeconomics, 37 (2 ):201–226, 2019.30392040
+Strauss Gregory P , Robinson Benjamin M , Waltz James A , Frank Michael J , Kasanova Zuzana , Herbener Ellen S , and Gold James M . Patients with schizophrenia demonstrate inconsistent preference judgments for affective and nonaffective stimuli. Schizophrenia Bulletin, 37 (6 ):1295–1304, 2010.20484522
+Taylor Jeremy MG , Cheng Wenting , and Foster Jared C . Reader reaction to “a robust method for estimating optimal treatment regimes” by zhang et al.(2012). Biometrics, 71 (1 ):267–273, 2015.
+Thall Peter F , Sung Hsi-Guang , and Estey Elihu H . Selecting therapeutic strategies based on efficacy and death in multicourse clinical trials. Journal of the American Statistical Association, 97 (457 ):29–39, 2002.
+Thall Peter F , Logothetis Christopher , Pagliaro Lance C , Wen Sijin , Brown Melissa A , Williams Dallas , and Millikan Randall E . Adaptive therapy for androgen-independent prostate cancer: A randomized selection trial of four regimens. Journal of the National Cancer Institute, 99 (21 ):1613–1622, 2007.17971530
+Tsiatis AA , Davidian M , Holloway S , and Laber EB . Dynamic Treatment Regimes. CRC Press, 2020.
+van der Laan Mark J and Petersen Maya L . Causal effect models for realistic individualized treatment and intention to treat rules. The International Journal of Biostatistics, 3 (1 ), 2007.
+Wallace Michael P and Moodie Erica EM . Doubly-robust dynamic treatment regimen estimation via weighted least squares. Biometrics, 71 (3 ):636–644, 2015.25854539
+Wallace Michael P , Moodie Erica EM , and Stephens David A . Personalized dose finding using outcome weighted learning comment. Journal of the American Statistical Association, 111 (516 ):1530–1534, 2016.
+Wallace Michael P , Moodie Erica EM , and Stephens David A . Reward ignorant modeling of dynamic treatment regimes. Biometrical Journal, 2018.
+Wang Yuanjia , Fu Haoda , and Zeng Donglin . Learning optimal personalized treatment rules in consideration of benefit and risk: with an application to treating type 2 diabetes patients with insulin therapies. Journal of the American Statistical Association, 113 (521 ): 1–13, 2018.30034060
+Wu Fan , Laber Eric B , Lipkovich Ilya A , and Severus Emanuel . Who will benefit from antidepressants in the acute treatment of bipolar depression? a reanalysis of the STEP-BD study by Sachs et al. 2007, using q-learning. International Journal of Bipolar Disorders, 3 (1 ):7, 2015.25844303
+Wu Tianshuang . Set Valued Dynamic Treatment Regimes. PhD thesis, University of Michigan, 2016.
+Zhang Baqun , Tsiatis Anastasios A , Davidian Marie , Zhang Min , and Laber Eric B . Estimating optimal treatment regimes from a classification perspective. Stat, 1 (1 ):103–114, 2012a.23645940
+Zhang Baqun , Tsiatis Anastasios A , Laber Eric B , and Davidian Marie . A robust method for estimating optimal treatment regimes. Biometrics, 68 (4 ):1010–1018, 2012b.22550953
+Zhang Baqun , Tsiatis Anastasios A , Laber Eric B , and Davidian Marie . Robust estimation of optimal dynamic treatment regimes for sequential treatment decisions. Biometrika, 100 (3 ):681–694, 2013.
+Zhang Yichi , Laber Eric B , Davidian Marie , and Tsiatis Anastasios A . Interpretable dynamic treatment regimes. Journal of the American Statistical Association, 113 (524 ): 1541–1549, 2018.30774169
+Zhao Yingqi , Zeng Donglin , Rush A John , and Kosorok Michael R . Estimating individualized treatment rules using outcome weighted learning. Journal of the American Statistical Association, 107 (499 ):1106–1118, 2012.23630406
+Zhou Xin , Mayer-Hamblett Nicole , Khan Umer , and Kosorok Michael R . Residual weighted learning for estimating individualized treatment rules. Journal of the American Statistical Association, 112 (517 ):169–187, 2017.28943682
+Ziebart Brian D , Maas Andrew L , Bagnell J Andrew , and Dey Anind K . Maximum entropy inverse reinforcement learning. In AAAI, volume 8 , pages 1433–1438. Chicago, IL, USA, 2008.
+
