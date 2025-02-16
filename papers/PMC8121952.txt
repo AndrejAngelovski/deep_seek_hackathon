@@ -1,0 +1,486 @@
+
+==== Front
+Nat Commun
+Nat Commun
+Nature Communications
+2041-1723
+Nature Publishing Group UK London
+
+22588
+10.1038/s41467-021-22588-0
+Article
+Modeling regulatory network topology improves genome-wide analyses of complex human traits
+http://orcid.org/0000-0003-1134-6413
+Zhu Xiang xiangzhu@psu.edu
+
+123
+Duren Zhana 34
+http://orcid.org/0000-0001-7466-2339
+Wong Wing Hung whwong@stanford.edu
+
+35
+1 grid.29857.31 0000 0001 2097 4281 Department of Statistics, The Pennsylvania State University, University Park, PA 16802 USA
+2 grid.29857.31 0000 0001 2097 4281 Huck Institutes of the Life Sciences, The Pennsylvania State University, University Park, PA 16802 USA
+3 grid.168010.e 0000000419368956 Department of Statistics, Stanford University, Stanford, CA 94305 USA
+4 grid.26090.3d 0000 0001 0665 0280 Center for Human Genetics, Department of Genetics and Biochemistry, Clemson University, Greenwood, SC 29646 USA
+5 grid.168010.e 0000000419368956 Department of Biomedical Data Science, Stanford University School of Medicine, Stanford, CA 94305 USA
+14 5 2021
+14 5 2021
+2021
+12 28518 12 2020
+3 3 2021
+© The Author(s) 2021
+https://creativecommons.org/licenses/by/4.0/ Open Access This article is licensed under a Creative Commons Attribution 4.0 International License, which permits use, sharing, adaptation, distribution and reproduction in any medium or format, as long as you give appropriate credit to the original author(s) and the source, provide a link to the Creative Commons license, and indicate if changes were made. The images or other third party material in this article are included in the article’s Creative Commons license, unless indicated otherwise in a credit line to the material. If material is not included in the article’s Creative Commons license and your intended use is not permitted by statutory regulation or exceeds the permitted use, you will need to obtain permission directly from the copyright holder. To view a copy of this license, visit http://creativecommons.org/licenses/by/4.0/.
+Genome-wide association studies (GWAS) have cataloged many significant associations between genetic variants and complex traits. However, most of these findings have unclear biological significance, because they often have small effects and occur in non-coding regions. Integration of GWAS with gene regulatory networks addresses both issues by aggregating weak genetic signals within regulatory programs. Here we develop a Bayesian framework that integrates GWAS summary statistics with regulatory networks to infer genetic enrichments and associations simultaneously. Our method improves upon existing approaches by explicitly modeling network topology to assess enrichments, and by automatically leveraging enrichments to identify associations. Applying this method to 18 human traits and 38 regulatory networks shows that genetic signals of complex traits are often enriched in interconnections specific to trait-relevant cell types or tissues. Prioritizing variants within enriched networks identifies known and previously undescribed trait-associated genes revealing biological and therapeutic insights.
+
+Gene regulatory networks are a useful means of inferring functional interactions from large-scale genomic data. Here, the authors develop a Bayesian framework integrating GWAS summary statistics with gene regulatory networks to identify genetic enrichments and associations simultaneously.
+
+Subject terms
+
+Genome-wide association studies
+Genomics
+Software
+Statistics
+https://doi.org/10.13039/100005492 Stanford University (SU) Stein Fellowship Zhu Xiang https://doi.org/10.13039/100000002 U.S. Department of Health & Human Services | National Institutes of Health (NIH) P50HG007735 R01HG010359 Wong Wing Hung U.S. Department of Health & Human Services | National Institutes of Health (NIH)issue-copyright-statement© The Author(s) 2021
+==== Body
+Introduction
+
+Genome-wide association studies (GWAS) have cataloged many significant and reproducible associations between common genetic variants, notably single-nucleotide polymorphisms (SNPs), and diverse human complex traits1. However, it remains challenging2 to translate these findings into biological mechanisms and clinical applications, because most trait-associated variants have individually small effects and map to non-coding sequences.
+
+One hypothesis is that non-coding variants cumulatively affect complex traits through cell type- or tissue-specific3 gene regulation4. To test this hypothesis, large-scale epigenomic5,6 and transcriptomic7–10 data have been made available spanning diverse human cell types and tissues. Exploiting these data many studies have shown enrichments of trait-associated SNPs in chromatin regions11–13 and genes14–16 that are active in trait-relevant cell types or tissues. These studies overlap regulatory maps with GWAS data and often ignore functional interactions among loci within regulatory programs.
+
+Gene regulatory networks17–20 have proven useful in mining functional interactions of genes from genomic data. Transcriptional regulatory interactions, rather than gene expression alone, drive tissue specificity19. Further, context-specific regulatory networks have emerged as promising tools to dissect the genetics of complex traits21–23. Network-connectivity analyses in GWAS have shown that trait-associated genes are more interconnected than expected18 and highly interconnected genes are enriched for trait heritability24. However, these analyses do not leverage observed enrichments to further enhance trait-associated gene discovery.
+
+To unleash the potential of regulatory networks in GWAS, we develop a Bayesian framework for simultaneous genome-wide network enrichment and gene prioritization analysis. Through extensive simulations we show several advantages of the method such as flexibility in various genetic architectures, robustness to a wide range of model mis-specification and improved performance over existing methods. Applying the method to 18 human traits and 38 regulatory networks, we identify strong enrichments of genetic associations in network topology specific to trait-relevant cell types or tissues. By prioritizing variants within enriched networks we identify trait-associated genes that were not implicated by the same GWAS. Many of these previously undescribed genes have strong support from multiple lines of external evidence; some are further validated by follow-up GWAS of the same traits with increased sample sizes. Together, these results demonstrate the potential for our method to yield additional biological and therapeutic insights from existing data.
+
+Results
+
+Method overview
+
+ Figure 1 shows the method schematic. In brief, we develop a model dissecting the total effect of a single SNP on a trait into effects of multiple (nearby and distal) genes through a regulatory network, and we combine it with a multiple-SNP regression likelihood25 based on GWAS summary statistics to perform Bayesian inference.Fig. 1 Schematic of RSS-NET.
+
+a Decomposition of the total effect of a common SNP on a complex trait through multiple nearby and distal genes. b Gene regulatory network defined as a weighted and directed bipartite graph linking TFs to TGs. c RSS-NET exploits the topology of a TF-TG network to decompose the total genetic effect into cis and trans-regulatory components. Both the SNP-gene (cjg) and TF-TG (vgt) weights in this decomposition are assumed known and are specified by existing omics data (Methods). In addition to TF-TG networks, RSS-NET also requires d GWAS summary statistics and e ancestry-matching LD estimates as input. f Bayesian hierarchical model underlying RSS-NET. An in-depth description is provided in Methods. g Given a network, RSS-NET produces a Bayes factor comparing the baseline (M0) and enrichment (M1) models to summarize the evidence for network enrichment. h RSS-NET prioritizes loci within an enriched network by computing P1, the posterior probability that at least one SNP j in a locus is trait-associated (βj ≠ 0). Differences between P1 under M0 and M1 reflect the influence of a regulatory network on genetic associations, highlighting previously undescribed trait-associated genes.
+
+Conceptually, we decompose the total effect of a common SNP on a complex trait into three components: a cis-regulatory component through nearby genes, a trans-regulatory component through distal genes that are regulated by genes near this SNP, and a remaining component due to other factors (Fig. 1a). Since common genetic variation contributes to complex traits primarily via gene regulation22, we find this decomposition a sensible approximation to the genetic basis of complex traits.
+
+Despite various ways to model the regulatory components, here we use cell type- or tissue-specific regulatory networks18,20 linking transcription factors (TFs) to target genes (TGs). Specifically, we define a regulatory network as a directed bipartite graph with weighted edges from TFs to TGs (Fig. 1b). Given a TF-TG network, we use its topology to decompose the total effect of each SNP into effects of multiple interconnected genes. As shown in Fig. 1c, we approximate the effect of SNP j using a weighted sum of cis effects of three nearby genes (outside-network gene k, TG u and TF g) and trans effects of three TGs (u and t on the same chromosome, and n on a different chromosome) that are directly regulated by TF g near SNP j. For identifiability we assume the SNP-gene (cjg) and TF-TG (vgt) weights in the decomposition are known, specified by existing omics data (Methods).
+
+To implement this regulatory decomposition in GWAS, we formulate a network-induced prior for SNP-level effects (β), and combine it with a regression likelihood25 of β based on single-SNP association statistics from a GWAS (Fig. 1d) and linkage disequilibrium (LD) estimates from a reference panel with ancestry matching the GWAS (Fig. 1e). We refer to the resulting Bayesian framework (Fig. 1f) as Regression with Summary Statistics exploiting NEtwork Topology (RSS-NET).
+
+RSS-NET accomplishes two tasks simultaneously: (1) testing if a network is enriched for genetic associations (Fig. 1g); (2) identifying which genes within this network drive the enrichment (Fig. 1h). Specifically, RSS-NET estimates two independent enrichment parameters (θ and σ2) that measure the extent to which, SNPs near network genes and regulatory elements (REs) have higher chances to be associated with the trait, and, SNPs near network edges have larger effect sizes, respectively. To assess network enrichment, RSS-NET computes a Bayes factor (BF) comparing the “enrichment model” (M1: θ > 0 or σ2 > 0) against the “baseline model” (M0: θ = 0 and σ2 = 0). To prioritize genes within enriched networks, RSS-NET contrasts posterior distributions of β estimated under M0 and M1.
+
+RSS-NET improves upon its predecessor RSS-E16. Specifically, RSS-NET exploits the full network topology, whereas RSS-E ignores the edge information. By explicitly modeling regulatory interconnections, RSS-NET outperforms RSS-E on both simulated and real data. Despite different treatments of network information, RSS-NET and RSS-E share computation schemes (Box 1; Supplementary Notes 1–3), allowing us to reuse the efficient algorithm of RSS-E. Software is available at https://github.com/suwonglab/rss-net.
+
+Box 1 RSS-NET model fitting algorithm Input: GWAS summary statistics {β^,S^}, LD estimates R^, network annotations {a, O, W} and a grid of hyper-parameters {θ0(h),θ(h),σ0(h),σ(h)}, h = 1, …, H; see Methods for details.
+
+Output: {τ, ν, α} such that ∏j=1p[αj⋅N(βj;νj,τj2)+(1−αj)⋅δ0(βj)] is the closest mean-field approximation in Kullback–Leibler divergence to the exact conditional posterior of β given the hyper-parameters {θ0, θ, σ0, σ}.
+
+1. Initialize: Set the initial values of {ν, α} randomly.
+
+2. Optimize:2a. Compute the prior parameters for each SNP j = 1, …, p:πj=1/[1+10−(θ0+ajθ)],σj2=σ02+σ2⋅∑g∈Ojwjg2.
+
+2b. Determine τ: τj=s^jσj/s^j2+σj2 for SNP j = 1, …, p.
+
+2c. Iterate through all SNPs to update {ν, α} as follows:νj=τj2⋅β^js^j2−∑i≠jr^ijαiνis^is^j,αj1−αj=πj1−πj⋅τjσj⋅expνj22τj2.
+
+2d. Repeat 2c until {ν, α} converge.
+
+3. Repeat: Repeat 2 for each {θ0(h),θ(h),σ0(h),σ(h)} in the grid to obtain the corresponding optimal {τ(h), ν(h), α(h)}, h = 1, …, H.
+
+Method comparison through simulations
+
+The key contribution of RSS-NET is a unified framework that leverages network topology to infer enrichments from whole-genome association statistics and prioritizes loci in light of inferred enrichments automatically. We are not aware of any published method with the same features. However, one could ignore topology and simply annotate SNPs based on their proximity to network genes and REs (Methods). For these SNP-level annotations there are methods to assess global enrichments or local associations on GWAS summary data. Here we use Pascal26, LDSC13,27, and RSS-E16 to benchmark RSS-NET.
+
+Given a network, we first simulated SNP effects (β) from either RSS-NET or mis-specified models, and then combined them with real genotypes to simulate phenotypes from a genome-wide multiple-SNP model. We computed the single-SNP association statistics, on which we compared RSS-NET with other methods (Figs. 2–4; Supplementary Figs. 1–9). Since RSS-NET is model-based, we designed a large array of simulation scenarios for both correctly- and mis-specified β. To reduce computation of this large-scale design, we mainly used genotypes28 of 348,965 genome-wide common SNPs and a whole-genome regulatory network inferred for human B cells (436 TFs, 3,018 TGs)20,29. We obtained similar results from simulations based on genotypes30 of 1 million common SNPs31 (Supplementary Fig. 9) or a different network (Supplementary Figs. 2 and 8).
+
+We started with simulations where RSS-NET modeling assumptions were satisfied. We considered two genetic architectures: a sparse scenario with most SNPs being null and a polygenic scenario with most SNPs being trait-associated. For each architecture, we created negative datasets by simulating SNP effects (β) from M0 and positive datasets by simulating β from three M1 patterns (only θ > 0; only σ2 > 0; both θ > 0 and σ2 > 0) of the target network, and applied the methods to detect M1 from all datasets (Fig. 2; Supplementary Figs. 1, 2). Existing methods tend to perform well in select settings. For example, Pascal and LDSC perform poorly when genetic signals are very sparse (Fig. 2b); RSS-E performs poorly when enrichment patterns are inconsistent with its modeling assumptions (Fig. 2c). Except for datasets with weak genetic signals on the network (Fig. 2d), RSS-NET performs consistently well in all scenarios. This is expected because the flexible model underlying RSS-NET can capture various genetic architectures and enrichment patterns. In practice, one rarely knows beforehand the correct architecture, which makes the flexibility of RSS-NET appealing.Fig. 2 Flexibility of RSS-NET to identify network-level enrichments from GWAS summary statistics.
+
+We used a B cell-specific regulatory network and real genotypes of 348,965 genome-wide SNPs to simulate negative and positive individual-level data under two genetic architectures (“sparse” and “polygenic”). We simulated SNP effects (β) for negative datasets from the baseline model (M0: θ = 0 and σ2 = 0). We simulated β for positive datasets from the enrichment model (M1: θ > 0 or σ2 > 0) for the target network under three scenarios: a θ > 0, σ2 = 0; b θ = 0, σ2 > 0; c θ > 0, σ2 > 0. Using the simulated individual-level data we computed single-SNP association statistics, on which we compared RSS-NET with RSS-E16, LDSC-baseline13, LDSC-baselineLD27, and Pascal26 using their default setups (Methods). Pascal includes two gene (“max”: maximum-of-χ2; “sum”: sum-of-χ2) and two pathway (“chi”: χ2 approximation; “emp”: empirical sampling) scoring options. For each dataset, Pascal and LDSC methods produced P-values, whereas RSS-E and RSS-NET produced BFs; these statistics were used to rank the significance of enrichments. A false and true positive occurs if a method identifies enrichment of the target network in a negative and positive dataset respectively. Each panel displays the trade-off between false and true positives via receiver operating characteristics (ROC) curves for all methods in 200 negative and 200 positive datasets of a simulation scenario, and also reports the corresponding areas under ROC curves (AUROCs, higher value indicating better performance). Dashed diagonal lines denote random ROC curves (AUROC = 0.5). d RSS-NET, as well as other methods, does not perform well when the target network harbors weak genetic associations. Simulation details and additional results are provided in Supplementary Figs. 1, 2.
+
+Genetic associations of complex traits are enriched in regulatory regions5,6. Since a regulatory network is a set of genes linked by REs, it is important to confirm that network enrichments identified by RSS-NET are not driven by general regulatory enrichments. To this end, we simulated negative datasets with enriched associations in random SNPs that are near genes (Fig. 3a; Supplementary Fig. 3) or REs (Fig. 3b; Supplementary Fig. 4). The results show that RSS-NET is unlikely to yield false discoveries due to arbitrary enrichments in regulatory regions, and it is yet more powerful than other methods.Fig. 3 Robustness of RSS-NET to model mis-specification in enrichment analyses.
+
+Here positive datasets were generated from M1 with θ > 0 and σ2 > 0 (Fig. 2c). Negative datasets were simulated from four scenarios where genetic associations were enriched in: a a random set of near-gene SNPs; b a random set of near-RE SNPs; c SNPs with MAF- and LD-dependent effects; d a random edge-altered network. By this design, RSS-NET was mis-specified in all four scenarios. Similar to positive datasets, the simulated false enrichments in all negative datasets manifested in both association proportion (more frequent) and magnitude (larger effect). RSS-E was excluded here because of its poor performance shown in Fig. 2c. The rest is the same as Fig. 2. Simulation details and additional results are provided in Supplementary Figs. 3–6.
+
+Minor allele frequency (MAF)- and LD-dependent genetic architectures are identified in complex traits27. To assess the impact of MAF- and LD-dependence on RSS-NET results, we simulated MAF- and LD-dependent SNP effects (β) from an additive model of 10 MAF bins and 6 LD-related annotations27, which were then used to create negative datasets (Fig. 3c; Supplementary Fig. 5). Similarly, enrichments identified by RSS-NET are unlikely to be false positives induced by MAF- and LD-dependence.
+
+Interconnections within regulatory programs play key roles in driving context specificity19 and propagating disease risk22, but existing methods often ignore the edge information. In contrast, RSS-NET leverages the full topology of a given network. The topology-aware feature increases the potential of RSS-NET to identify the most relevant network for a trait among candidates that share many nodes but differ in edges. To illustrate this feature, we designed a scenario where a real target network and random candidates had the same nodes and edge counts, but different edges. We simulated positive and negative datasets where genetic associations were enriched in the target network and random candidates respectively, and then tested enrichment of the target network on all datasets. As expected, only RSS-NET can reliably distinguish true enrichments of the target network from enrichments of its edge-altered counterparts (Fig. 3d; Supplementary Fig. 6).
+
+To benchmark its prioritization component, we compared RSS-NET with gene-based association modules in RSS-E16 and Pascal26 (Fig. 4; Supplementary Figs. 7–9). Consistent with previous work16, RSS methods outperform Pascal methods even without network enrichment (Fig. 4a). This is because RSS-NET and RSS-E exploit a multiple regression framework25 to learn the genetic architecture from data of all genes and assess their effects jointly, whereas Pascal only uses data of a single gene to estimate its effect. Similar to enrichment simulations (Fig. 2), RSS-NET outperforms RSS-E in prioritizing genes across different architectures (Fig. 4b–d). This again highlights the flexibility of RSS-NET.Fig. 4 Power of RSS-NET to identify gene-level associations from GWAS summary statistics.
+
+We used a B cell-specific regulatory network and real genotypes of 348,965 genome-wide SNPs to simulate individual-level GWAS data under four scenarios: a θ = 0, σ2 = 0; b θ > 0, σ2 = 0; c θ = 0, σ2 > 0; d θ > 0, σ2 > 0. Using the simulated individual-level data we computed single-SNP association statistics, on which we compared RSS-NET with gene-level association components of RSS-E16 and Pascal26. RSS-E is a special case of RSS-NET assuming σ2 = 0, and RSS-E-baseline is a special case of RSS-E assuming θ = 0. Pascal includes two gene scoring options: maximum-of-χ2 (“max”) and sum-of-χ2 (“sum”). Given a network, Pascal and RSS-E-baseline do not leverage any network information, RSS-E ignores the edge information, and RSS-NET exploits the full topology. Each scenario contains 200 datasets and each dataset contains 16,954 autosomal protein-coding genes for testing. We defined a gene as "trait-associated'' if at least one SNP j within 100 kb of the transcribed region of this gene had non-zero effect (βj ≠ 0). For each gene in each dataset, RSS methods produced posterior probabilities that the gene was trait-associated (P1), whereas Pascal methods produced association P-values; these statistics were used to rank the significance of gene-level associations. The first row of each panel displays ROC curves and AUROCs for all methods, with dashed diagonal lines indicating random performance (AUROC = 0.5). The second row of each panel displays precision-recall (PRC) curves and areas under PRC curves (AUPRCs) for all methods, with dashed horizontal lines indicating random performance. For both AUROC and AUPRC, higher value indicates better performance. Simulation details and additional results are provided in Supplementary Figs. 7, 8.
+
+Finally, since RSS-NET uses network as is and most networks to date are algorithmically inferred, we performed simulations to assess the robustness of RSS-NET under noisy networks. Specifically, we simulated datasets from a real target network, created noisy networks by randomly removing edges from this real target, and then fed the noisy networks (rather than the real one) to RSS-NET. By exploiting retained true nodes and edges, RSS-NET produces reliable results in identifying both network enrichments and genetic associations, and unsurprisingly, its performance drops as the noise level increases (Supplementary Fig. 10).
+
+In conclusion, RSS-NET is adaptive to various genetic architectures and enrichment patterns, it is robust to a wide range of model mis-specification, and it outperforms existing related methods. To further investigate its real-world utility, we applied RSS-NET to analyze 18 complex traits and 38 regulatory networks.
+
+Enrichment analyses of 38 networks across 18 traits
+
+We first inferred20 whole-genome regulatory networks for 38 human cell types and tissues (Methods; Supplementary Data 1) from public data29 of paired expression and chromatin accessibility (PECA). On average each network has 431 TFs, 3,298 TGs, and 93,764 weighted TF-TG edges. Clustering showed that networks recapitulated context similarity, with immune cells and brain regions grouping together as two units (Fig. 5a; Supplementary Fig. 11).Fig. 5 RSS-NET analyses of 18 complex traits and 38 regulatory networks.
+
+a Clustering of 38 regulatory networks based on t-distributed stochastic neighbour embedding. Details are provided in Supplementary Fig. 11. b Similarity between a given tissue-specific PECA-based network and 394 CAGE-based networks for various cell types and tissues (a: adult samples; c: cell lines; f: fetal samples). The similarity between a PECA- and CAGE-based network is summarized by Jaccard indices of their node sets (x-axis) and edge sets (y-axis). To simplify visualization, only labels of top four CAGE-based networks with the highest edge similarity are shown for each PECA-based network. See Supplementary Fig. 12 for additional results. c Ternary diagram showing, for each trait, percentages of the “best” enrichment model (with the largest BF) as M11: θ > 0, σ2 = 0, M12: θ = 0, σ2 > 0 and M13: θ > 0, σ2 > 0 across networks. See Supplementary Table 4 for numerical values. Shown are 16 traits having multiple networks more enriched than the near-gene control. d Comparison of context-matched PECA-based (y-axis) and CAGE-based (x-axis) network enrichments on the same GWAS. Dashed lines have slope 1 and intercept 0. See Supplementary Fig. 14 for additional results. e Median proportion of genes with P1bma higher than reference estimates (P1base or P1near), among genes with reference estimates higher than a given cutoff. Medians are evaluated among 16 traits in c. See Supplementary Table 5 for numerical values. Overlap of RSS-NET prioritized genes (P1bma≥0.9) with genes implicated in f knockout mouse phenotypes47 and g human Mendelian diseases49,50. An edge indicates that a category of knockout mouse or Mendelian genes is significantly enriched for genes prioritized for a GWAS trait (FDR ≤ 0.1). Thicker edges correspond to stronger enrichments. To simplify visualization, only top-ranked categories are shown for each trait (f 3; g 2). See Supplementary Data 4, 5 for full results. Trait abbreviations are defined in Supplementary Table 1.
+
+As a validation, we assessed the pairwise similarity between the 38 PECA-based networks and 394 human cell type- and tissue-specific regulatory networks18 reconstructed from independent cap analysis of gene expression (CAGE) data7,8. Reassuringly, PECA- and CAGE-based networks often reached maximum overlap when they were derived from biosamples of matched cell types or tissues (Fig. 5b; Supplementary Fig. 12), showing that the context specificity of regulatory networks is replicable.
+
+On the 38 networks, we applied RSS-NET to analyze 1.1 million common SNPs31 for 18 traits, using GWAS summary statistics from 20,883 to 253,288 European-ancestry individuals (Supplementary Table 1) and LD estimates16 from the European panel of 1000 Genomes Project30. For each trait-network pair we computed a BF assessing network enrichment. Full results of 684 trait-network pairs are available online (Data availability).
+
+To check whether observed enrichments could be driven by general regulatory enrichments, we created a “near-gene” control network with 18,334 protein-coding autosomal genes as nodes and no edges, and analyzed this control with RSS-NET on the same GWAS data. For most traits, the near-gene control has substantially weaker enrichment than the actual networks. In particular, 512 out of 684 trait-network pairs (one-sided binomial P = 2.2 × 10−40) showed stronger enrichments than their near-gene counterparts (average log10 BF increase: 13.94; one-sided t P = 5.1 × 10−15), and, 16 out of 18 traits had multiple networks more enriched than the near-gene control (minimum: 5; one-sided Wilcoxon P = 1.2 × 10−4). In contrast, LDSC and Pascal methods identified fewer trait-network pairs passing the near-gene enrichment control (LDSC maximum: 389, one-sided χ2 P = 1.7 × 10−12; Pascal maximum: 69, P = 2.0 × 10−129; Supplementary Table 2). Consistent with simulations (Fig. 3a, b), these results indicate that network enrichments identified by RSS-NET are unlikely driven by arbitrary enrichments harbored in the vicinity of genes.
+
+Among 512 trait-network pairs passing the near-gene enrichment control, we further examined whether the observed enrichments could be confounded by network properties or genomic annotations. We did not observe any correlation between BFs and three network features (proportion of SNPs in a network: Pearson R = −3.0 × 10−2, two-sided P = 0.49; node counts: R = −5.4 × 10−2, P = 0.23; edge counts: R = −9.2 × 10−3, P = 0.84). To check confounding effects of genomic annotations, we computed the correlation between BFs and proportions of SNPs falling into both a network and each of 73 functional categories27, and we did not find any significant correlation (−0.13 < R < −0.01, P > 0.05/73). Similar patterns hold for all 684 trait-network pairs (Supplementary Table 3 and Data 2). Together, the results suggest that observed enrichments are unlikely driven by generic network or genome features.
+
+For each trait-network pair, we also computed BFs comparing the baseline (M0) against three disjoint models where enrichment (M1) was contributed by (1) network genes and REs only (M11: θ > 0, σ2 = 0); (2) TF-TG edges only (M12: θ = 0, σ2 > 0); (3) network genes, REs and TF-TG edges (M13: θ > 0, σ2 > 0). We found that M13 was the most supported model by data (with the largest BF) for 411 out of 512 trait-network pairs (one-sided binomial P = 1.2 × 10−45), highlighting the key role of TF-TG edges in driving enrichments. To further confirm this finding, we repeated RSS-NET analyses by fixing all TF-TG edge weights as zero (vtg = 0) and we observed substantially weaker enrichments (average log10 BF decrease: 30.46; one-sided t P = 8.6 × 10−35; Supplementary Fig. 13). Altogether the results corroborate the “omnigenic model” that genetic signals of complex traits are distributed across the genome via regulatory interconnections22.
+
+Enrichment patterns varied considerably among traits (Fig. 5c; Supplementary Table 4). For type 2 diabetes (T2D), two of five networks passing the near-gene enrichment control showed the strongest support for M11. Many networks showed the strongest support for M12 in breast cancer (10), body mass index (BMI, 14), waist-hip ratio (37), and schizophrenia (38). Since one rarely knows the true enrichment patterns a priori, and M1 includes {M11, M12,  M13} as special cases, we used M1-based BFs throughout this study. Collectively, these results highlight the heterogeneity of network enrichments across traits, which can be potentially learned from data by flexible approaches like RSS-NET.
+
+Top-ranked enrichments recapitulated many trait-context links reported in previous GWAS. Genetic associations with BMI were enriched in the networks of pancreas (BF = 2.07 × 1013), bowel (BF = 8.02 × 1012), and adipose (BF = 4.73 × 1012), consistent with the roles of obesity-related genes in insulin biology and energy metabolism. Networks of immune cells showed enrichments for rheumatoid arthritis (RA, BF = 2.95 × 1060), inflammatory bowel disease (IBD, BF = 5.07 × 1035) and Alzheimer’s disease (BF = 8.31 × 1026). Networks of cardiac and other muscle tissues showed enrichments for coronary artery disease (CAD, BF = 9.78 × 1028), atrial fibrillation (AF, BF = 8.55 × 1014), and heart rate (BF = 2.43 × 107). Other examples are brain network with neuroticism (BF = 2.12 × 1019), and, liver network with high- and low-density lipoprotein (HDL, BF = 2.81 × 1021; LDL, BF = 7.66 × 1027).
+
+Some top-ranked enrichments were not identified in the original GWAS, but they are biologically relevant. For example, natural killer (NK) cell network showed the strongest enrichment among 38 networks for BMI (BF = 3.95 × 1013), LDL (BF = 5.18 × 1030), and T2D (BF = 1.49 × 1077). This result supports a recent mouse study32 revealing the role of NK cell in obesity-induced inflammation and insulin resistance, and adds to the considerable evidence unifying metabolism and immunity in many pathological states33. Other examples include adipose network with CAD34 (BF = 1.67 × 1029), liver network with Alzheimer’s disease16,35 (BF = 1.09 × 1020) and monocyte network with AF36,37 (BF = 4.84 × 1012).
+
+Some networks show enrichments in multiple traits. To assess network co-enrichments among traits, we tested correlations for all trait pairs using their BFs of 38 networks (Supplementary Data 3). In total 29 of 153 trait pairs had significant correlations (two-sided Pearson P < 0.05/153). Reassuringly, subtypes of the same disease showed strongly correlated enrichments, as in IBD (R = 0.96, P = 1.3 × 10−20) and CAD subtypes (R = 0.90, P = 3.3 × 10−14). The results also recapitulated known genetic correlations including RA with IBD (R = 0.79, P = 5.3 × 10−9) and neuroticism with schizophrenia (R = 0.73, P = 1.6 × 10−7). Network enrichments of CAD were correlated with network enrichments of known CAD risk factors such as heart rate (R = 0.75, P = 5.1 × 10−8), BMI (R = 0.71, P = 5.1 × 10−7), AF (R = 0.65, P = 9.2 × 10−6) and height (R = 0.64, P = 1.6 × 10−5). Network enrichments of Alzheimer’s disease were strongly correlated with network enrichments of LDL (R = 0.90, P = 2.6 × 10−14) and IBD (R = 0.78, P = 8.3 × 10−9), consistent with roles of lipid metabolism and inflammation in Alzheimer’s disease35. Genetic correlations among traits are not predictive of correlations based on network enrichments (Pearson R = 0.12, two-sided P = 0.18), suggesting the additional explanatory power from regulatory networks to reveal trait similarities in GWAS.
+
+To show that RSS-NET can be applied more generally, we analyzed the CAGE-based networks18 of 20 cell types and tissues that were present in 38 PECA-based networks (Fig. 5d; Supplementary Fig. 14). PECA-based networks often produced larger BFs than their CAGE-based counterparts on the same GWAS data (average log10 BF increase: 17.36; one-sided t P = 1.4 × 10−11), suggesting that PECA-based networks are more enriched in genetic signals. Reassuringly, PECA- and CAGE-based networks consistently highlighted known trait-context links (e.g., immune cells and autoimmune diseases, muscle tissues and heart diseases). For some traits PECA-based networks produced more informative results. For example, CAGE-based analysis of HDL showed a broad enrichment pattern across cell types and tissues (which is consistent with previous connectivity analysis18 of the same data), whereas PECA-based analysis identified liver as the top-enriched context by a wide margin. Although not our main focus, these results highlight the potential for RSS-NET to systematically evaluate different network inferences in GWAS.
+
+Enrichment-informed prioritization of network genes
+
+A key feature of RSS-NET is that inferred network enrichments automatically contribute to prioritization of network genes (Method). Specifically, for each locus RSS-NET produces P1base, P1near and P1net, the posterior probabilities that at least one SNP in the locus is associated with the trait, assuming M0, M1 for the near-gene control network and M1 for a given network, respectively. When multiple networks are enriched, RSS-NET produces P1bma by averaging P1net over all networks passing the near-gene control, weighted by their BFs. This allows us to assess genetic associations in light of enrichment without having to select a single enriched network. Differences between enrichment estimates (P1net or P1bma) and reference estimates (P1base or P1near) reflect the impact of network on a locus.
+
+RSS-NET enhances genetic association detection by leveraging inferred enrichments. To quantify this improvement, for each trait we calculated the proportion of genes with higher P1bma than reference estimates (P1base or P1near), among genes with reference P1 passing a given cutoff (Fig. 5e). When using P1base as reference, we observed high proportions of genes with P1bma>P1base (median: 82–98%) across a wide range of P1base-cutoffs (0−0.9), and as expected, the improvement decreased as the reference cutoff increased. When using P1near as reference, we observed less genes with improved P1bma than using P1base (one-sided Wilcoxon P = 9.8 × 10−4), suggesting the observed improvement might be partially due to general near-gene enrichments, but proportions of genes with P1bma>P1near remained high (median: 74–94%) nonetheless. Similar patterns occurred when we repeated the analysis with P1net across 512 trait-network pairs (Supplementary Table 5). Together the results demonstrate the strong influence of network enrichments on nominating additional trait-associated genes.
+
+RSS-NET tends to promote more genes in networks with stronger enrichments. For each trait, the proportion of genes with P1net>P1near in a network is often positively correlated with the network enrichment BF (R: 0.28−0.91; Supplementary Table 6). When a gene belongs to multiple networks, the highest P1net often occurs in the top-enriched networks (Fig. 6). We illustrate this coherent pattern with MT1G, a liver-active9 gene prioritized for HDL by RSS-NET and also implicated in a recent multi-ancestry genome-wide interaction analysis of HDL38. Although MT1G belongs to regulatory networks of 18 contexts, only the top enrichment in liver informs a strong association between MT1G and HDL (P1net=0.98), and remaining networks with weaker enrichments yield minimal improvement (P1base=0.10, P1net:0.14−0.19).Fig. 6 RSS-NET gene prioritization results of select trait-network pairs.
+
+Shown are four trait-network pairs: a body mass index and pancreas; b rheumatoid arthritis and B cell; c high-density lipoprotein cholesterol and liver; d neuroticism and putamen. In the first column of each panel, each point represents a member gene of a given network (blue circle: TF; orange triangle: TG). Dashed lines have slope 1 and intercept 0. In the second and third columns, each point represents a cell type- or tissue-specific network to which a select gene belongs. Numerical values of P1 and BF are available online (Data availability) and are provided as a Source Data file.
+
+RSS-NET recapitulates many genes implicated in the same GWAS. For each analyzed dataset we downloaded the GWAS-implicated genes from the GWAS Catalog1 and computed the proportion of these genes with high P1bma. With a stringent cutoff P1bma≥0.9, we observed a significant overlap (median across traits: 69%; median two-sided Fisher exact P = 1.2 × 10−26; Supplementary Table 7). Reassuringly, many recapitulated genes are well-established for the traits (Supplementary Table 8), such as CACNA1C for schizophrenia, TCF7L2 for T2D, APOB for lipids, and STAT4 for autoimmune diseases.
+
+RSS-NET also uncovers putative associations that were not reported in the same GWAS. To demonstrate that many of these previously undescribed associations are potentially real, we exploited 15 analyzed traits that each had a updated GWAS with larger sample size. In each case, we obtained newly implicated genes from the GWAS Catalog1 and computed the proportion of these genes that were identified by RSS-NET (P1bma≥0.9). The overlap proportions remained significant (median: 12%; median two-sided Fisher exact P = 1.9 × 10−5; Supplementary Table 7), showing the potential of RSS-NET to identify trait-associated genes that can be validated by later GWAS with additional samples. Among these validated genes, many are strongly supported by multiple lines of external evidence (Table 1). A particular example is NR0B2, a liver-active9 gene prioritized for HDL by RSS-NET (P1base=0.84, P1net=0.98) but not identified by standard GWAS39 of the same data (minimum single-SNP association P = 1.4 × 10−7 within 100 kb, n = 99, 900). NR0B2 was associated with mouse lipid traits40–42 and human obesity43, and identified in a later GWAS of HDL44 with doubled sample size (P = 9.7 × 10−16, n = 187, 056).Table 1 Examples of RSS-NET highlighted genes that were not reported in GWAS of the same data but were implicated in later GWAS with increased sample sizes (genome-wide significance threshold: single-SNP association P < 5 × 10−8).
+
+Trait	Gene (Role)	P1base	P1near	P1bma	P1net (Network, BF)	Mouse trait	Therapeutic and clinical evidence	
+BMI	PAX2 (TF)	0.78	0.80	0.94	0.94 (Pancreas, 2.07 × 1013)	Eye, Renal	Ocular and renal anomalies	
+	FLT3 (TG)	0.61	0.70	0.85	0.85 (Cerebellum, 8.70 × 1011)	Growth, Immune	Acute myeloid leukemia	
+WAIST	LAMB1 (TG)	0.97	0.97	0.98	0.98 (Esophagus, 6.78 × 10239)	Neuron, NS	Lissencephaly-5	
+BC	KCTD1 (TG)	0.89	0.93	0.98	0.98 (Heart, 8.08 × 107)	CS	Scalp-ear-nipple syndrome	
+	CASP8 (TG)	0.71	0.72	0.94	0.94 (Aorta, 8.27 × 108)	Growth, Immune	Hepatoma, Glionitrin A*	
+RA	AIRE (TF)	0.54	0.61	0.84	0.84 (B cell, 3.31 × 1057)	Immune	APS1	
+IBD	LPP (TG)	0.98	0.94	0.99	0.99 (Monocyte, 6.28 × 1031)	Cellular	Acute myeloid leukemia	
+	FOXP1 (TF)	0.84	0.78	0.95	0.95 (NK cell, 5.07 × 1035)	Immune, Neuron	Language impairment	
+	CCND3 (TG)	0.81	0.89	0.95	0.95 (NK cell, 5.07 × 1035)	Immune		
+HDL	ALOX5 (TG)	0.97	0.97	0.99	0.99 (Monocyte, 4.75 × 1015)	Immune, Metab.	Atherosclerosis	
+	GPAM (TG)	0.92	0.95	0.98	0.98 (Liver, 2.81 × 1021)	Liver, Metab.		
+	NR0B2 (TG)	0.84	0.93	0.98	0.98 (Liver, 2.81 × 1021)	Growth, Metab.	Early-onset obesity	
+LDL	CERS2 (TG)	0.99	0.99	1.00	1.00 (NK cell, 5.18 × 1030)	Liver, Metab.		
+	ABCA1 (TG)	0.98	0.98	0.99	0.99 (Liver, 7.66 × 1027)	Liver, Metab.	Tangier disease, Probucol*	
+	ABCB11 (TG)	0.68	0.72	0.88	0.88 (Liver, 7.66 × 1027)	Liver, Metab.	Cholestasis	
+	DLG4 (TG)	0.69	0.59	0.85	0.85 (NK cell, 5.18 × 1030)	Metab., NS	Tat-NR2B9c*	
+	SOX17 (TF)	0.52	0.65	0.82	0.84 (CD8, 5.86 × 1028)	Liver, Metab.	Vesicoureteral reflux-3	
+CAD	TGFB1 (TG)	0.92	0.99	0.99	0.99 (Adipose, 1.67 × 1029)	CS, Growth	Camurati-Engelmann disease	
+	FN1 (TG)	0.58	0.79	0.91	0.92 (GEJ, 9.78 × 1028)	CS, Metab.	GFND2, SMDCF	
+	CDH13 (TG)	0.31	0.55	0.77	0.82 (Heart, 1.93 × 1028)	CS, Metab.		
+	EDNRA (TG)	0.57	0.79	0.80	0.82 (Aorta, 1.09 × 1027)	CS, Muscle	Ambrisentan*, Macitentan*	
+AF	SCN5A (TG)	0.87	0.92	1.00	1.00 (Heart, 6.89 × 1012)	CS, Muscle	Brugada syndrome-1, ATFB10	
+	ENPEP (TG)	0.50	0.76	0.92	0.94 (Uterus, 2.71 × 1011)		QGC-001*	
+	ATXN1 (TG)	0.45	0.62	0.90	0.90 (Colon, 7.54 × 1014)	Muscle, NS	Spinocerebellar ataxia-1	
+	MYOT (TG)	0.55	0.66	0.86	0.87 (Muscle, 8.55 × 1014)		Myofibrillar myopathy	
+SCZ	FOXP1 (TF)	1.00	1.00	1.00	1.00 (Colon, 1.20 × 10144)	Growth, Neuron	Language impairment	
+	BCL11A (TG)	1.00	1.00	1.00	1.00 (Spleen, 1.44 × 10141)	Immune, NS	Dias-Logan syndrome	
+	SLC25A12 (TG)	0.79	0.81	0.88	0.88 (Muscle, 4.99 × 10127)	Neuron, NS	DEE39	
+NEU	TCF4 (TF)	0.72	0.88	0.95	0.95 (CD8, 3.66 × 1020)	Immune, NS	Pitt-Hopkins syndrome	
+	RAPSN (TG)	0.77	0.88	0.93	0.93 (Muscle, 8.20 × 1017)	Muscle, NS	Congenital myasthenic syndrome-11	
+	MEF2C (TF)	0.15	0.40	0.83	0.83 (Ileum, 8.56 × 1022)	Growth, Neuron	Mental retardation-20	
+	SNCA (TG)	0.15	0.32	0.78	0.79 (Putamen, 2.12 × 1019)	Neuron, NS	Parkinsonism, BIIB054*	
+	PAX6 (TF)	0.10	0.22	0.62	0.64 (Putamen, 2.12 × 1019)	NS, Vision	Optic nerve hypoplasia	
+	PCLO (TG)	0.06	0.17	0.63	0.63 (Ileum, 8.56 × 1022)	Growth, NS	Pontocerebellar hypoplasia-3	
+The “mouse trait” column is based on the Mouse Genome Informatics47. The “therapeutic/clinical evidence” column is based on the Online Mendelian Inheritance in Man50 and Therapeutic Target Database53. Drugs are identified with an asterisk ("*”). Trait abbreviations are defined in Supplementary Table 1. GEJ: gastroesophageal junction. CS: cardiovascular system. DS: digestive/alimentary system. Metab.: metabolism. NS: nervous system. APS1: autoimmune polyendocrinopathy syndrome-1. GFND2: glomerulopathy with fibronectin deposits-2. SMDCF: corner fracture type of spondylometaphyseal dysplasia. ATFB10: familial atrial fibrillation-10. DEE39: developmental and epileptic encephalopathy-39.
+
+Biological and clinical relevance of prioritized genes
+
+Besides looking up overlaps with GWAS publications, we cross-referenced RSS-NET prioritized genes (P1bma≥0.9) with multiple orthogonal databases to systematically assess their biological and therapeutic themes.
+
+Mouse phenomics provides important resources to study genetics of human traits45. Here we evaluated overlap between RSS-NET prioritized genes and genes implicated in 27 categories of knockout mouse phenotypes46. Network-informed genes (P1bma≥0.9) were significantly enriched in 128 mouse-human trait pairs (FDR ≤ 0.1; Supplementary Data 4). Fewer significant pairs were identified without network information (119 for P1near≥0.9; 80 for P1base≥0.9). For many human traits, top enrichments of network-prioritized genes occurred in closely related mouse phenotypes (Fig. 5f). Genes prioritized for schizophrenia were strongly enriched in nervous, neurological and growth phenotypes (OR: 1.77–2.04). Genes prioritized for autoimmune diseases were strongly enriched in immune and hematopoietic phenotypes (OR: 2.05–2.35). The cardiovascular system showed strong enrichments of genes prioritized for heart conditions (OR: 2.45–2.92). The biliary system showed strong enrichments of genes prioritized for lipids, BMI, CAD, and T2D (OR: 2.16–10.78). The phenotypically matched cross-species enrichments strengthen the biological relevance of RSS-NET results.
+
+Genes causing Mendelian diseases often contribute to complex traits47. Here we quantified overlap between RSS-NET prioritized genes and genes causing 19 categories48 of Mendelian disorders49. Leveraging regulatory networks (P1bma≥0.9), we observed 47 significantly enriched Mendelian-complex trait pairs (FDR ≤ 0.1; 44 for P1near≥0.9; 31 for P1base≥0.9; Supplementary Data 5), among which the top-ranked ones were often phenotypically matched (Fig. 5g). Genes prioritized for schizophrenia were strongly enriched in Mendelian development and psychiatric disorders (OR: 2.22–2.23). Genes prioritized for AF and heart rate were strongly enriched in arrhythmia (OR: 7.16–8.28). Genes prioritized for autoimmune diseases were strongly enriched in monogenic immune dysregulation (OR: 3.11–4.32). Monogenic cardiovascular diseases showed strong enrichments of genes prioritized for lipids and heart conditions (OR: 2.69–3.70). We also identified pairs where Mendelian and complex traits seemed unrelated but were indeed linked. Examples include Alzheimer’s disease with immune dysregulation35 (OR = 7.32) and breast cancer with insulin disorders50 (OR = 9.71). The results corroborate the continuum between Mendelian and complex traits.
+
+Human genetics has proven valuable in therapeutic development51. To evaluate their potential in drug discovery, we examined whether RSS-NET prioritized genes are pharmacologically active and clinically relevant52. We identified genes with drug indications matching GWAS traits. One identical match is EDNRA, a gene that is prioritized for CAD (P1base=0.57, P1net=0.82 in aorta) and also a successful target of approved drugs for cardiovascular diseases (Table 1). We identified genes with drug indications closely related to GWAS traits. For example, TTR is prioritized for Alzheimer (P1base=0.64, P1bma=0.94) and also a successful target of approved drugs for amyloidosis (Table 2). For early-stage development, overlaps between drug indications and GWAS traits may provide additional genetic confidence. For example, HCAR3 is prioritized for HDL (P1base=0.85, P1bma=0.92) and also a clinical trial target for lipid metabolism disorders (Table 2). Other examples include CASP8 with cancer, NFKB2 with IBD, and DLG4 with stroke (Tables 1, 2). For some genes we found mismatches between drug indications and GWAS traits, which could suggest drug repurposing opportunities53. For example, CSF3 is prioritized for AF (P1base=0.56, P1bma=0.88) and also a successful target of an approved drug for aplastic anemia (AA). Since CSF3 is associated with various blood cell traits in mouse54 and human55, and inflammation plays a role in both AA and AF etiology36,37,56, it is tempting to assess effects of the approved AA drug on AF. Mechanistic evaluations are required to understand the prioritized therapeutic genes, but they could form a useful basis for future studies.Table 2 Examples of RSS-NET highlighted genes that have not reached genome-wide significance in the GWAS Catalog1 at the time of analysis.
+
+Trait	Gene (Role)	P1base	P1near	P1bma	P1net (Network, BF)	Mouse trait	Therapeutic and clinical evidence	
+BMI	NEXN (TG)	0.71	0.79	0.89	0.90 (Muscle, 9.31 × 1012)	CS, Muscle	Cardiomyopathy	
+	CDX2 (TF)	0.61	0.70	0.83	0.86 (NK cell, 3.95 × 1013)	DS, Growth		
+WAIST	BSCL2 (TG)	0.80	0.68	0.87	0.87 (Esophagus, 6.78 × 10239)	Adipose, Growth	Berardinelli-Seip syndrome	
+	FOXP2 (TF)	0.56	0.59	0.73	0.73 (Esophagus, 6.78 × 10239)	Growth, NS	Speech-language disorder-1	
+BC	ADSL (TG)	0.76	0.80	0.91	0.92 (Aorta, 8.27 × 108)	CS, Eye	Adenylosuccinase deficiency	
+	SYNE1 (TG)	0.57	0.63	0.89	0.90 (Esophagus, 6.30 × 107)	Growth, Muscle	AMC3, EDMD4, SCAR8	
+RA	TAL1 (TF)	0.71	0.79	0.91	0.93 (CD4, 3.02 × 1052)	Immune, Tumor	Acute lymphocytic leukemia	
+	FHIT (TG)	0.30	0.60	0.90	0.91 (CD4, 3.02 × 1052)	Immune, Tumor		
+	FLT3 (TG)	0.33	0.57	0.73	0.73 (B cell, 3.31 × 1057)	Immune, Tumor	Acute myeloid leukemia	
+IBD	FHIT (TG)	0.63	0.87	0.95	0.95 (CD4, 5.32 × 1033)	Immune, Tumor		
+	GATA3 (TF)	0.85	0.83	0.94	0.94 (NK cell, 5.07 × 1035)	Immune, Renal	Barakat syndrome	
+	RORA (TF)	0.66	0.78	0.87	0.90 (B cell, 1.49 × 1032)	Immune, NS	Intellectual disability	
+	NFKB2 (TF)	0.74	0.85	0.84	0.88 (B cell, 1.49 × 1032)	Immune	Immunodeficiency, DIMS-0150*	
+	LRBA (TG)	0.42	0.58	0.72	0.72 (NK cell, 5.07 × 1035)	Immune	Immunodeficiency	
+	DOCK2 (TG)	0.38	0.53	0.71	0.71 (NK cell, 5.07 × 1035)	Immune	Immunodeficiency	
+HDL	MT1G (TG)	0.10	0.09	0.98	0.98 (Liver, 2.81 × 1021)	CS, Metab.		
+	RETSAT (TG)	0.79	0.80	0.95	0.95 (Liver, 2.81 × 1021)	Adipose, Metab.		
+	ESR1 (TF)	0.77	0.82	0.95	0.95 (Liver, 2.81 × 1021)	CS, Metab.	Myocardial infarction	
+	HCAR3 (TG)	0.85	0.85	0.92	0.92 (Monocyte, 4.75 × 1015)	Metab.	ARI-3037MO*	
+	TNNC1 (TG)	0.48	0.45	0.78	0.78 (Liver, 2.81 × 1021)	CS, Muscle	Cardiomyopathy, Levosimendan*	
+LDL	RAF1 (TG)	0.79	0.83	0.90	0.90 (Aorta, 3.71 × 1027)	CS, Immune	Cardiomyopathy, Semapimod*	
+	APOA1 (TG)	0.70	0.76	0.90	0.90 (Liver, 7.66 × 1027)	CS, Metab.	Amyloidosis, HDL deficiency	
+	ACADVL (TG)	0.69	0.59	0.85	0.85 (NK cell, 5.18 × 1030)	Liver, Metab.	VLCAD deficiency	
+T2D	ITGB6 (TG)	0.75	0.99	0.99	0.99 (Ileum, 4.52 × 1062)	Immune, Metab.	Amelogenesis imperfecta type IH	
+HR	TKT (TG)	0.65	0.67	0.92	0.93 (Aorta, 2.43 × 107)	CS, Growth	SDDHD	
+CAD	OSM (TG)	0.56	0.78	0.86	0.86 (Aorta, 1.09 × 1027)	Immune, Metab.	GSK2330811*	
+	TRIB1 (TG)	0.43	0.68	0.85	0.85 (Adipose, 1.67 × 1029)	Adipose, Metab.		
+	TAB2 (TG)	0.19	0.43	0.61	0.61 (CD8, 1.13 × 1025)	CS	Congenital heart defects	
+AF	TPMT (TG)	0.88	0.93	0.99	0.99 (Ileum, 4.43 × 1013)	Metab.	Poor metabolism of thiopurines-1	
+	RUNX1 (TF)	0.44	0.60	0.88	0.89 (Heart, 2.15 × 1014)	CS, Immune	Acute myeloid leukemia, FPDMM	
+	CSF3 (TG)	0.56	0.72	0.88	0.88 (Muscle, 8.55 × 1014)	Blood, Immune	Interleukin-3*	
+LOAD	CASP2 (TG)	0.99	1.00	1.00	1.00 (CD8, 8.31 × 1026)	Cellular, NS	Caspase-2*	
+	TTR (TG)	0.64	0.92	0.94	0.94 (Pancreas, 3.53 × 1020)	Metab.	Amyloidosis, Inotersen*, Patisiran*	
+SCZ	RORA (TF)	1.00	1.00	1.00	1.00 (Cortex, 5.39 × 10128)	Neuron, NS	Intellectual disability	
+	ERBB4 (TG)	1.00	1.00	1.00	1.00 (Putamen, 7.22 × 10116)	Neuron, NS	Amyotrophic lateral sclerosis-19	
+	NFIB (TF)	0.97	0.97	0.98	0.98 (Cortex, 5.39 × 10128)	NS	MACID	
+	GRIK2 (TG)	0.90	0.94	0.97	0.97 (Cerebellum, 3.15 × 10129)	Neuron, NS	Mental retardation	
+	SYT1 (TG)	0.84	0.89	0.93	0.93 (Cerebellum, 3.15 × 10129)	Neuron, NS	Baker-Gordon syndrome	
+	ESR1 (TF)	0.80	0.84	0.93	0.93 (Colon, 1.07 × 10141)	Neuron, NS	Migraine	
+	NTRK2 (TG)	0.78	0.84	0.91	0.91 (Cerebellum, 3.15 × 10129)	Neuron, NS	DEE58	
+	LRRK2 (TG)	0.73	0.78	0.86	0.86 (Monocyte, 5.85 × 10131)	Neuron, NS	Parkinsonism, DNL151*, DNL201*	
+	C9orf72 (TG)	0.74	0.78	0.83	0.83 (Spleen, 1.44 × 10141)	Neuron, NS	FTDALS1	
+	SNCA (TG)	0.60	0.66	0.74	0.74 (Cerebellum, 3.15 × 10129)	Neuron, NS	Parkinsonism, BIIB054*	
+NEU	LMBRD1 (TG)	0.42	0.66	0.94	0.94 (Ileum, 8.56 × 1022)	Metab.	MAHCF	
+	PRKCQ (TG)	0.36	0.56	0.90	0.91 (Spleen, 2.13 × 1019)	Immune, NS		
+	ATP1A2 (TG)	0.33	0.39	0.76	0.78 (Putamen, 2.12 × 1019)	Neuron, NS	AHC1, FHM2	
+AMC3: myogenic-type arthrogryposis multiplex congenita-3. EDMD4: Emery-Dreifuss muscular dystrophy-4. SCAR8: autosomal recessive spinocerebellar ataxia-8. VLCAD: very long-chain acyl-CoA dehydrogenase. SDDHD: short stature, developmental delay, and congenital heart defects. FPDMM: familial platelet disorder with associated myeloid malignancy. MACID: acquired macrocephaly with impaired intellectual development. FTDALS1: frontotemporal dementia and/or amyotrophic lateral sclerosis. MAHCF: methylmalonic aciduria and homocystinuria of the cblF type. AHC1: alternating hemiplegia of childhood-1. FHM2: familial hemiplegic migraine-2. The remaining abbreviations are the same as in Table 1.
+
+Discussion
+
+We present RSS-NET, a topology-aware method for integrative analysis of regulatory networks and GWAS summary data. We demonstrate the improvement of RSS-NET over existing methods through extensive simulations, and illustrate its potential to yield biological and therapeutic insights via analyses of 38 networks and 18 traits. With multi-omics integration becoming a routine in GWAS, we expect that researchers will find RSS-NET useful.
+
+Compared with existing integrative approaches, RSS-NET has several key strengths. First, unlike many methods that require loci passing a significance threshold11,12,17, RSS-NET uses data from genome-wide common variants. This potentially allows RSS-NET to identify subtle enrichments even in studies with few significant hits. Second, RSS-NET models enrichments directly as increased rates (θ) and sizes (σ2) of SNP-level associations, and thus bypasses the issue of converting SNP-level summary data to gene-level statistics17,18,26. Third, RSS-NET inherits from RSS-E16 an important feature that inferred enrichments automatically highlight which network genes are most likely to be trait-associated. This prioritization component, though useful, is missing in current polygenic analyses13,15,24,27. Fourth, by making flexible modeling assumptions, RSS-NET is adaptive to unknown genetic architectures.
+
+RSS-NET allows us to study complex trait genetics through the lens of regulatory topology. Complementing previous connectivity analyses17–19,24, RSS-NET highlights a consistent pattern that genetic signals of complex traits often distribute across genome via regulatory topology. RSS-NET further leverages topology enrichments to enhance trait-associated gene discovery. The topology awareness of RSS-NET in both enrichment and prioritization analyses is enabled by a model that decomposes the effect of a single SNP into effects of multiple (cis or trans) genes through a regulatory network.
+
+RSS-NET depends critically on the quality of input networks. The more accurate networks are, the better performance RSS-NET achieves. Currently, our understanding of regulatory networks remains incomplete, and most of the available networks are algorithmically inferred17–20. Artifacts in inferred networks can bias RSS-NET results; however, our simulations confirm the robustness of RSS-NET when input networks are not severely deviated from ground truth. The modular design of RSS-NET enables systematic assessment of various networks in the same GWAS and provides interpretable performance metrics, as illustrated in our comparison of PECA- and CAGE-based networks. As more accurate networks become available in diverse cellular contexts, the performance of RSS-NET will be markedly enhanced.
+
+Like any method, RSS-NET has several limitations in its current form. First, despite its prioritization feature, RSS-NET does not attempt to pinpoint associations to causal SNPs within prioritized loci. For this task, we recommend off-the-shelf fine-mapping methods57. Second, the computation time of RSS-NET increases as the total number of analyzed SNPs increases, and thus our simulations and analyses focused on 0.35–1.19 million genome-wide common SNPs28,31. Relaxing the complexity will allow RSS-NET to analyze more SNPs jointly. Third, RSS-NET uses a simple method to derive SNP-gene relevance (cjg) from expression quantitative trait loci (eQTL). A more principled approach would be applying the RSS likelihood25 to eQTL summary data (as we did in GWAS) and using the estimated SNP effects to specify cjg. However, our initial assessments indicated that the model-based approach was limited by the small sample sizes of current eQTL studies9,10. With eQTL studies reaching large sample sizes58 comparable to current GWAS1, this approach may improve cjg specification in RSS-NET. Fourth, RSS-NET analyzes one network at a time. Since a complex disease typically manifests in various sites, multiple cellular networks are likely to mediate disease risk jointly. To extend RSS-NET to incorporate multiple networks, an intuitive idea would be representing the total effect of a SNP as an average of its effect in each network, weighted by network relevance for a disease. Fifth, RSS-NET does not include known SNP-level13,24,27 or gene-level14–16 annotations. Although our mis-specification simulations and near-gene control analyses confirm that RSS-NET is robust to generic enrichments of known features, accounting for known annotations can help interpret observed network enrichments24. Our preliminary experiments showed that incorporating additional networks or annotations in RSS-NET increased computation costs. Hence, we view developing computationally efficient multi-network, multi-annotation methods as an important area for future work.
+
+In summary, improved understanding of complex trait genetics requires biologically informed models beyond the standard one employed in GWAS. By modeling context-specific regulatory topology, RSS-NET is a step forward in this direction.
+
+Methods
+
+Gene and SNP information
+
+This study used genes and SNPs from the human genome assembly GRCh37. This study used 18,334 protein-coding autosomal genes (http://ftp.ensembl.org/pub/grch37/release-94/gtf/homo_sapiens, accessed January 3, 2019). Simulations used 348,965 genome-wide SNPs28 (https://www.wtccc.org.uk), and data analyses used 1,289,786 genome-wide HapMap331 SNPs (https://data.broadinstitute.org/alkesgroup/LDSCORE/w_hm3.snplist.bz2, accessed November 27, 2018). As discussed later, these SNP sets were chosen to reduce computation. This study excluded SNPs on sex chromosomes, SNPs with MAF less than 1%, and SNPs in the human leukocyte antigen region.
+
+Gene regulatory networks
+
+In this study a regulatory network is a directed bipartite graph {VTF, VTG, ETF→TG}, where VTF and VTG denote the node sets of TFs and TGs respectively, and ETF→TG denotes the set of TF-to-TG edges, summarizing how TFs regulate TGs through REs (Fig. 1b; Supplementary Note 4). Each edge has a weight between 0 and 1, measuring the relative regulation strength of a TF on a TG.
+
+We inferred 38 regulatory networks from context-matched sequencing data of gene expression (e.g., RNA-seq) and chromatin accessibility (e.g., DNAse-seq or ATAC-seq). We obtained these PECA data from ENCODE29 (https://www.encodeproject.org, accessed December 14, 2018) and GTEx9 (https://gtexportal.org, accessed July 13, 2019); see Supplementary Data 1. The network-construction software and TF-motif information are available at https://github.com/suwonglab/PECA. The 38 networks are available at https://github.com/suwonglab/rss-net, with descriptive statistics provided in Supplementary Tables 9–11.
+
+We first constructed an “omnibus” network from PECA data of 201 biosamples across 80 cell types and tissues, using a regression-based method20. In brief, by modeling the distribution of TG expression levels conditional on RE accessibility levels and TF expression levels, we estimated a regression coefficient for each TF-TG pair. We selected a TF-TG pair as the network edge if this estimated coefficient was significantly non-zero, and divided the estimate by the maximum of estimates for all TF-TG pairs to set a (0, 1)-scale edge weight. We also estimated a regression coefficient for each RE-TG pair, which reflected the regulating strengths of REs on TGs and was later used to construct context-specific networks, i.e., {Iit} in Eq. (1). Here we defined REs as open chromatin peaks called from accessibility sequencing data by MACS259 (https://github.com/macs3-project/MACS, accessed July 12, 2018).
+
+With the omnibus network in place, we then constructed context-specific networks for 5 immune cell types, 5 brain regions and 27 non-brain tissues. For each context (tissue or cell type), we computed a trans-regulation score (TRS) between TF g and TG t:1 TRSgt=2∣Rgt∣⋅TF~g⋅TG~t⋅∑i(RE~i⋅Bgi⋅Iit),
+
+where Rgt is the correlation of TF g and TG t expression levels across all contexts; {TF~g,TG~t,RE~i} are normalized context-specific expression (TF g, TG t) and accessibility (RE i) levels (y~=y2/ymed, where y denotes the actual accessibility or expression level in a given context, and ymed denotes median level across all contexts); Bgi reflects the motif binding strength of TF g on RE i, defined as the sum of motif position weight matrix-based log-odds probabilities of all binding sites on RE i and calculated by HOMER60 (http://homer.ucsd.edu/homer/, accessed July 12, 2018); and Iit reflects the overall regulating strength of RE i on TG t, provided by the omnibus network. TRS naturally ranks and selects context-specific TF-TG edges because a larger value of TRSgt indicates a stronger regulating strength of TF g on TG t in the given context. We set (0, 1)-scale TF-TG edge weights by computing log2(1+TRSgt)/max(i,j){log2(1+TRSij)}.
+
+To validate PECA-based networks and illustrate RSS-NET as a generally applicable tool, we also analyzed 394 cell type- and tissue-specific TF-TG circuits18 inferred from independent CAGE data7,8 (http://regulatorycircuits.org/, accessed May 8, 2019). When evaluating the similarity between PECA- and CAGE-based networks (Fig. 5b; Supplementary Fig. 12), we used their full node and edge sets to compute Jaccard indices. When running RSS-NET on context-matched PECA- and CAGE-based networks (Fig. 5d; Supplementary Fig. 14), we selected top-ranked CAGE-based edges to match PECA-based edge counts (Supplementary Table 10) and normalized CAGE-based edge weights (x~=min{1,x1/6}, where x denotes original weight) to match the scale of PECA-based edge weights (Supplementary Table 11).
+
+External databases for cross-reference
+
+To validate and interpret RSS-NET results, we used the following external databases (accessed November 28, 2019): GWAS Catalog1 (https://www.ebi.ac.uk/gwas/), Mouse Genome Informatics46 (http://www.informatics.jax.org/), Mendelian gene sets48 (https://github.com/bogdanlab/gene_sets/), Online Mendelian Inheritance in Man49 (https://www.omim.org/), Therapeutic Target Database52 (http://db.idrblab.net/ttd/).
+
+When quantifying overlaps between RSS-NET prioritized genes and mouse or Mendelian genes, we used all genes for each GWAS trait. We repeated the overlap analysis under the same significance cutoff (FDR ≤ 0.1) after excluding genes implicated in the same or later GWAS (Supplementary Table 7). Since GWAS-implicated genes overlap significantly with phenotypically-matched mouse and Mendelian genes (median two-sided Fisher exact P = 7.1 × 10−7), we identified fewer discoveries as expected (mouse-human pairs: 26, Mendelian-complex pairs: 4; Supplementary Data 4–5), but we obtained consistent effect sizes nonetheless (mouse R = 0.78, two-sided P = 8.6 × 10−73; Mendelian R = 0.89, P = 9.0 × 10−74; Supplementary Fig. 15).
+
+Network-induced effect size distribution
+
+We model the total effect of SNP j on a given trait βj as2 βj~πj⋅N(μj,σ02)+(1−πj)⋅δ0,
+
+where πj denotes the probability that SNP j is associated with the trait (βj ≠ 0), N(μj,σ02) denotes a normal distribution with mean μj and variance σ02 specifying the effect size of a trait-associated SNP j, and δ0 denotes point mass at zero (βj = 0).
+
+We model the trait-association probability πj as3 log10πj1−πj=θ0+aj⋅θ,
+
+where θ0 < 0 captures the genome-wide background proportion of trait-associated SNPs, θ > 0 reflects the increase in probability, on the log10-odds scale, that a SNP near network genes and REs is trait-associated, and aj reflects the proximity of SNP j to a network. Following previous analyses15,16,24, we let aj = 1 if SNP j is within 100 kb of any member gene (TF, TG) or RE for a given network. Equation (3) suggests that if a cell type or tissue plays an important role in a trait then genetic associations may occur more often in SNPs involved in the corresponding network genes and REs than expected by chance.
+
+We model the mean effect size μj as4 μj=∑g∈Ojwjg⋅γjg,
+
+where Oj is the set of all nearby or distal genes contributing to the total effect of SNP j, wjg measures the relevance between SNP j and gene g, and γjg denotes the effect of SNP j on a trait due to gene g. Equation (4) provides a general decomposition of total SNP effect into gene effects through {Oj, wjg}.
+
+Here we use a TF-TG network to specify {Oj, wjg} in Eq. (4):5 μj=∑g∈Gjcjg⏟cis⋅(γjg+∑t∈Tgvgt⋅γjt⏟trans),
+
+where Gj is the set of all genes within 1 Mb window of SNP j (a standard window size used in cis-eQTL studies9,10,58), cjg measures the relative impact of a SNP j on gene g, Tg is the set of all genes directly regulated by TF g in a given network (Tg is empty if gene g is not a TF), and vgt measures the relative impact of a TF g on its TG t. Since a genome-wide analysis typically involves many SNPs and genes, we fix {Tg, vgt, cjg} to ensure the identifiability of Eq. (5). We use inferred edges and weights of a context-specific TF-TG network20,29 to specify Tg and vgt respectively. We use context-matched cis-eQTL9,10,58 to specify cjg (Supplementary Note 5 and Tables 12, 13). Equation (5) suggests that the total effect of a SNP may fan out through some regulatory network of multiple (nearby or distal) genes to affect the trait22.
+
+We model the random effect γjg of SNP j due to gene g as6 γjg~i.i.d.N(0,σ2),
+
+where the SNP-level subscript j in γjg ensures the exchangeability of βj in Eq. (2); see Supplementary Note 6. Equation (6) uses a constant σ2 for computational convenience. Equation (6) could be modified by letting σ2 depend on functional annotations13,27 of SNP j and context-specific expression14–16 of gene g, though possibly at higher computational cost.
+
+Equations (2), (4), and (6) implies a variance decomposition for SNP effect:7 Var(βj)=πj⋅(σ02+σ2⋅∑g∈Ojwjg2).
+
+We hypothesize that Eq. (7) may provide an alternative approach to heritability analyses13,24,27 and we plan to investigate it elsewhere.
+
+Bayesian hierarchical modeling
+
+Consider a GWAS with n unrelated individuals measured on p SNPs. In practice we do not know the true SNP-level effects β:=(β1,…,βp)′ in Eq. (2), but we can infer them from GWAS summary statistics and LD estimates. Specifically, we perform Bayesian inference for β by combining the network-based prior defined by Eqs. (2)–(6) with the RSS likelihood25:8 β^~N(S^R^S^−1β,S^R^S^),
+
+where β^:=(β^1,…,β^p)′, S^:=diag(s^) is a p × p diagonal matrix with s^:=(s^1,…,s^p)′, {β^j,s^j} are estimated single-SNP effect size of each SNP j and its standard error from the GWAS, and R^:=[r^ij] is the p × p LD matrix estimated from a reference panel with ancestry matching the GWAS.
+
+RSS-NET, defined by Eqs. (2)–(6), and (8), consists of four unknown hyper-parameters {θ0,θ,σ02,σ2}. To specify hyper-priors, we first introduce two free parameters {η, ρ} to re-parameterize {σ02,σ2}:9 σ02=η⋅(1−ρ)⋅∑j=1pπjns^j2−1,σ2=η⋅ρ⋅∑j=1pπj⋅∑g∈Ojwjg2ns^j2−1,
+
+where, roughly, η represents the proportion of the total phenotypic variation explained by p SNPs, and ρ represents the proportion of total genetic variation explained by network annotations {Oj, wjg}. Because ns^j2 approximates the ratio of phenotype variance to genotype variance, Eq. (9) ensures that SNP effects (β) do not rely on sample size n and have the same measurement unit as the trait. See Supplementary Note 7 for derivation of Eq. (9).
+
+We then place independent uniform grid priors on {θ0, θ, η, ρ} (Supplementary Table 14). These simple hyper-priors produce accurate posterior estimates for hyper-parameters in simulations (Supplementary Fig. 16). RSS-NET results are robust to grid choice on both simulated and real data (Supplementary Figs. 17–18). (If one had specific information about {θ0, θ, η, ρ} in a given setting then this could be incorporated in the hyper-priors).
+
+Network enrichment
+
+To assess whether a regulatory network is enriched for genetic associations with a trait, we evaluate a Bayes factor (BF):10 BF=f(β^∣S^,R^,a,O,W,M1)f(β^∣S^,R^,a,O,W,M0),
+
+where f( ⋅ ) denotes probability densities, a is defined in Eq. (3), {O, W} are defined in Eq. (4), M1 denotes the enrichment model with θ > 0 or σ2 > 0, and M0 denotes the baseline model with θ = 0 and σ2 = 0. The observed data are BF times more likely under M1 than under M0, and so the larger the BF, the stronger evidence for network enrichment. See Supplementary Note 2 for computation details. To compute BFs used in Fig. 5c, we replace M1 in Eq. (10) with three restricted enrichment models (M11, M12, M13). Unless otherwise specified, all BFs reported in this work are based on M1.
+
+Given a BF cutoff, false positive rates vary considerably across genetic architectures and enrichment patterns in simulations (Supplementary Table 15). As the genetic basis of most complex traits remains unknown, we find it impractical to fix some significance threshold. Instead we recommend an adaptive approach. Specifically, for a given GWAS we run RSS-NET on a near-gene control network containing all genes as nodes and no edges (i.e., aj = 1 for all SNPs within 100 kb of any gene and vgt = 0 for all TF-TG pairs), and we use the resulting BF as the enrichment threshold in this GWAS. Our analyses show three advantages of this approach. First, it is adaptive to study heterogeneity such as trait differences and sample sizes (Supplementary Table 1). Second, it accounts for generic enrichments of genetic signals residing near genes. Third, it facilitates comparisons with non-Bayesian methods based on P-values (Supplementary Table 2).
+
+Locus association
+
+To identify the association between a locus and a trait, we compute P1, the posterior probability that at least one SNP in the locus is associated with the trait:11 P1=1−Pr(βj=0,∀j∈locus∣D,model),
+
+where D is a shorthand for the input data of RSS-NET including GWAS summary statistics {β^,S^}, LD estimates R^ and network annotations {a, O, W}. See Supplementary Note 3 for computation details. For a locus, P1base, P1near, and P1net correspond to P1 evaluated under the baseline model M0, the enrichment model M1 for the near-gene control network, and M1 for a given TF-TG network. In this study, we defined a locus as the transcribed region of a gene plus 100 kb up and downstream, and we used “locus” and “gene” interchangeably.
+
+For K networks with enrichments stronger than the near-gene control, we use Bayesian model averaging (BMA) to compute P1bma for each locus:12 P1bma=∑k=1KP1net(k)⋅BF(k)∑k=1KBF(k),
+
+where P1net(k) and BF(k) are enrichment P1 and BF for network k. The ability to average across networks in Eq. (12) is an advantage of our Bayesian framework, because it allows us to assess associations in light of network enrichment without having to select a single enriched network.
+
+In this study we used P1 ≥ 0.9 as the significance cutoff, yielding a median false positive rate 1.24 × 10−4 and a median false discovery rate 6.43 × 10−2 in simulations (Supplementary Tables 16, 17). We also highlighted genes with P1net>P1near (Fig. 6 and Tables 1, 2), because they showcase the influence of context-specific regulatory topology on prioritizing genetic associations.
+
+Computation time
+
+The total computation time of RSS-NET to analyze a pair of trait and network is determined by the number of genome-wide SNPs analyzed, the size of hyper-parameter grid, and the number of variational iterations till convergence, all of which can vary considerably among studies. It is thus hard to make general statements about computation time. However, to give a specific example, we finished the analysis of 1,032,214 HapMap3 SNPs and liver network for HDL within 12 hours in a standard computer cluster (60 nodes, 8 CPUs, and 32 Gb memory per node).
+
+The number of genome-wide SNPs analyzed (p) affects the computation time of RSS-NET in two distinct ways. First, the per-iteration complexity of RSS-NET is linear with p (Box 1; Supplementary Note 1). Second, a large p defines a large optimization problem, often requiring many iterations to converge. To quantify the impact of p on computation time, we simulated datasets from different sets of genome-wide SNPs, analyzed them with RSS-NET on identical computers, and compared the computation time (Supplementary Fig. 9). When p increased from 348,965 to 1,030,397, on average the total computation time was four times longer (one-sided Wilcoxon P = 8.0 × 10−132).
+
+Simulation overview
+
+To assess the network-induced model for SNP effects (β) in RSS-NET, we simulated a large array of correctly- and mis-specified β for a given target network. Specifically, we generated “positive” datasets where the underlying β was simulated from M1 for the target network, and “negative” datasets where β was simulated from either M0 or the following scenarios: (1) random enrichments of near-gene SNPs; (2) random enrichments of near-RE SNPs; (3) MAF- and LD-dependent effect sizes; (4) M1 for edge-altered copies of the target network. For a fair comparison in each scenario, we matched positive and negative datasets by both the number of trait-associated SNPs and the proportion of phenotypic variation explained by all SNPs. See Supplementary Figs. 1–9 for details.
+
+We combined the simulated β with genotypes of 348,965 genome-wide SNPs from 1,458 individuals28 to simulate phenotypes using an additive multiple-SNP model with Gaussian noise. We performed the standard single-SNP analysis of simulated individual-level datasets to generate GWAS summary statistics, on which we compared RSS-NET with external methods.
+
+External software for benchmarking
+
+To benchmark RSS-NET this study used the following software: RSS-E (https://github.com/stephenslab/rss, accessed October 19, 2018), Pascal (https://www2.unil.ch/cbg/index.php?title=Pascal, accessed October 5, 2017) and LDSC with two sets of baseline annotations as covariates (version 1.0.0, https://github.com/bulik/ldsc; baseline model v1.1, https://data.broadinstitute.org/alkesgroup/LDSCORE/1000G_Phase3_baseline_v1.1_ldscores.tgz; baselineLD model v2.1, https://data.broadinstitute.org/alkesgroup/LDSCORE/1000G_Phase3_baselineLD_v2.1_ldscores.tgz; accessed November 27, 2018). Versions of all packages and files were up-to-date at the time of analysis.
+
+Given a context-specific TF-TG network, RSS-E and LDSC methods use the same binary SNP-level annotations {aj} defined in Eq. (3). The interface design of Pascal does not allow direct usage of {aj}. Here we supplied Pascal program with a GMT file containing all member genes of a network and set SNP-to-gene window sizes as 100 kb (“–up = 100000 –down = 100000”). In this study all external methods were used with their default setups, which did not include the edge information of a network.
+
+RSS-E outputs the same statistics as RSS-NET (BF and P1). Pascal implements two gene scoring methods (maximum-of-χ2 and sum-of-χ2) to produce gene-based association P-values. Given gene scores, Pascal provides two gene set scoring options (χ2 approximation and empirical sampling) to produce enrichment P-values. LDSC methods output enrichment P-values and coefficient Z-scores, yielding consistent results in our simulations (LDSC-baseline: R = 0.98, two-sided P = 1.2 × 10−67; LDSC-baselineLD: R = 0.98, P = 9.1 × 10−63; Supplementary Fig. 19). Due to the higher power shown in simulations (LDSC-baseline: average AUROC increase = 0.012, one-sided t P = 4.0 × 10−3; LDSC-baseline LD: average AUROC increase = 0.023, one-sided t P = 1.5 × 10−5), we used enrichment P-values from LDSC in this study.
+
+Reporting summary
+
+Further information on research design is available in the Nature Research Reporting Summary linked to this article.
+
+Supplementary information
+
+Supplementary Information
+
+Reporting Summary
+
+Descriptions of Additional Supplementary Files
+
+Supplementary Data 1
+
+Supplementary Data 2
+
+Supplementary Data 3
+
+Supplementary Data 4
+
+Supplementary Data 5
+
+Source data
+
+Source Data
+
+Supplementary information
+
+The online version contains supplementary material available at 10.1038/s41467-021-22588-0.
+
+Acknowledgements
+
+This study is supported by Stein Fellowship to X.Z. and NIH grants P50HG007735 and R01HG010359 to W.H.W. This study uses computational resources provided by the Stanford Research Computing Center. This study uses data generated by the WTCCC, 1000 Genomes, ENCODE, GTEx, DICE, eQTLGen, and multiple GWAS consortia (Supplementary Note 8). We thank Xin He for helpful comments on a draft manuscript.
+
+Author contributions
+
+X.Z. and W.H.W. conceived the study. X.Z. developed the methods and implemented the software. X.Z. designed and conducted the simulation experiments. Z.D. provided the 38 regulatory networks. X.Z. performed the data analyses. X.Z. prepared the supplementary materials and online resources. X.Z. wrote the manuscript. X.Z. and W.H.W. revised the manuscript.
+
+Data availability
+
+The 38 network files are available at https://github.com/suwonglab/rss-net (10.5281/zenodo.4553387). Analysis results of 38 networks and 18 traits are available at https://suwonglab.github.io/rss-net/results. Links and identifiers of other data are specified in Methods, Supplementary Notes 5 and 8. Source data are provided with this paper.
+
+Code availability
+
+The RSS-NET software is available at https://github.com/suwonglab/rss-net (10.5281/zenodo.4553387). Tutorials of installing and using RSS-NET are available at https://suwonglab.github.io/rss-net. Results of this study were generated from MATLAB version 9.3.0.713579 (R2017b), on a Linux system with Intel E5-2650V2 2.6 GHz and E5-2640V4 2.4 GHz processors. Links and identifiers of other codes are specified in Methods.
+
+Competing interests
+
+The authors declare no competing interests.
+
+Peer review information Nature Communications thanks the anonymous reviewer(s) for their contribution to the peer review of this work.
+
+Publisher’s note Springer Nature remains neutral with regard to jurisdictional claims in published maps and institutional affiliations.
+==== Refs
+References
+
+1. Buniello A The NHGRI-EBI GWAS Catalog of published genome-wide association studies, targeted arrays and summary statistics 2019 Nucleic Acids Res. 2019 47 D1005 D1012 10.1093/nar/gky1120 30445434
+2. Tam V Benefits and limitations of genome-wide association studies Nat. Rev. Genet. 2019 20 467 484 10.1038/s41576-019-0127-1 31068683
+3. Hekselman I Yeger-Lotem E Mechanisms of tissue and cell-type specificity in heritable traits and diseases Nat. Rev. Genet. 2020 21 137 150 10.1038/s41576-019-0200-9 31913361
+4. French J Edwards S The role of noncoding variants in heritable disease Trends Genet. 2020 36 880 891 10.1016/j.tig.2020.07.004 32741549
+5. The ENCODE Project Consortium. An integrated encyclopedia of DNA elements in the human genome. Nature 489, 57–74 (2012).
+6. Kundaje A Integrative analysis of 111 reference human epigenomes Nature 2015 518 317 330 10.1038/nature14248 25693563
+7. Andersson R An atlas of active enhancers across human cell types and tissues Nature 2014 507 455 461 10.1038/nature12787 24670763
+8. The FANTOM Consortium and the RIKEN PMI and CLST (DGT). A promoter-level mammalian expression atlas. Nature 507, 462–470 (2014).
+9. GTEx Consortium. Genetic effects on gene expression across human tissues. Nature 550, 204–213 (2017).
+10. Schmiedel BJ Impact of genetic polymorphisms on human immune cell gene expression Cell 2018 175 1701 1715 10.1016/j.cell.2018.10.022 30449622
+11. Maurano MT Systematic localization of common disease-associated variation in regulatory DNA Science 2012 337 1190 1195 10.1126/science.1222794 22955828
+12. Trynka G Chromatin marks identify critical cell types for fine mapping complex trait variants Nat. Genet. 2013 45 124 130 10.1038/ng.2504 23263488
+13. Finucane HK Partitioning heritability by functional annotation using genome-wide association summary statistics Nat. Genet. 2015 47 1228 1235 10.1038/ng.3404 26414678
+14. Calderon D Inferring relevant cell types for complex traits by using single-cell gene expression Am. J. Hum. Genet. 2017 101 686 699 10.1016/j.ajhg.2017.09.009 29106824
+15. Finucane HK Heritability enrichment of specifically expressed genes identifies disease-relevant tissues and cell types Nat. Genet. 2018 50 621 629 10.1038/s41588-018-0081-4 29632380
+16. Zhu X Stephens M Large-scale genome-wide enrichment analyses identify new trait-associated genes and pathways across 31 human phenotypes Nat. Commun. 2018 9 4361 10.1038/s41467-018-06805-x 30341297
+17. Greene CS Understanding multicellular function and disease with human tissue-specific networks Nat. Genet. 2015 47 569 576 10.1038/ng.3259 25915600
+18. Marbach D Tissue-specific regulatory circuits reveal variable modular perturbations across complex diseases Nat. Methods 2016 13 366 370 10.1038/nmeth.3799 26950747
+19. Sonawane AR Understanding tissue-specific gene regulation Cell Rep. 2017 21 1077 1088 10.1016/j.celrep.2017.10.001 29069589
+20. Duren Z Chen X Jiang R Wang Y Wong WH Modeling gene regulation from paired expression and chromatin accessibility data Proc. Natl. Acad. Sci. USA 2017 114 E4914 E4923 10.1073/pnas.1704553114 28576882
+21. Califano A Butte AJ Friend S Ideker T Schadt E Leveraging models of cell regulation and GWAS data in integrative network-based association studies Nat. Genet. 2012 44 841 847 10.1038/ng.2355 22836096
+22. Liu X Li YI Pritchard JK Trans effects on gene expression can drive omnigenic inheritance Cell 2019 177 1022 1034 10.1016/j.cell.2019.04.014 31051098
+23. Li W Duren Z Jiang R Wong WH A method for scoring the cell type-specific impacts of noncoding variants in personal genomes Proc. Natl. Acad. Sci. USA 2020 117 21364 21372 10.1073/pnas.1922703117 32817564
+24. Kim SS Genes with high network connectivity are enriched for disease heritability Am. J. Hum. Genet. 2019 104 896 913 10.1016/j.ajhg.2019.03.020 31051114
+25. Zhu X Stephens M Bayesian large-scale multiple regression with summary statistics from genome-wide association studies Ann. Appl. Stat. 2017 11 1561 1592 29399241
+26. Lamparter D Marbach D Rueedi R Kutalik Z Bergmann S Fast and rigorous computation of gene and pathway scores from SNP-based summary statistics PLoS Comput. Biol. 2016 12 e1004714 10.1371/journal.pcbi.1004714 26808494
+27. Gazal S Linkage disequilibrium–dependent architecture of human complex traits shows action of negative selection Nat. Genet. 2017 49 1421 1427 10.1038/ng.3954 28892061
+28. Wellcome Trust Case Control Consortium. Genome-wide association study of 14,000 cases of seven common diseases and 3,000 shared controls. Nature 447, 661–678 (2007).
+29. Luo Y New developments on the Encyclopedia of DNA Elements (ENCODE) data portal Nucleic Acids Res. 2020 48 D882 D889 10.1093/nar/gkz1062 31713622
+30. 1000 Genomes Project Consortium. A global reference for human genetic variation. Nature 526, 68–74 (2015).
+31. International HapMap 3 Consortium. Integrating common and rare genetic variation in diverse human populations. Nature 467, 52–58 (2010).
+32. Lee B-C Adipose natural killer cells regulate adipose tissue macrophages to promote insulin resistance in obesity Cell Metab. 2016 23 685 698 10.1016/j.cmet.2016.03.002 27050305
+33. Hotamisligil GS Inflammation, metaflammation and immunometabolic disorders Nature 2017 542 177 185 10.1038/nature21363 28179656
+34. Oikonomou EK Antoniades C The role of adipose tissue in cardiovascular health and disease Nat. Rev. Cardiol. 2019 16 83 99 10.1038/s41569-018-0097-6 30287946
+35. Kang J Rivest S Lipid metabolism and neuroinflammation in Alzheimer’s disease: a role for liver X receptors Endocr. Rev. 2012 33 715 746 10.1210/er.2011-1049 22766509
+36. Shahid F Lip GY Shantsila E Role of monocytes in heart failure and atrial fibrillation J. Am. Heart Assoc. 2018 7 e007849 29419389
+37. Aviles RJ Inflammation as a risk factor for atrial fibrillation Circulation 2003 108 3006 3010 10.1161/01.CIR.0000103131.70301.4F 14623805
+38. Noordam R Multi-ancestry sleep-by-SNP interaction analysis in 126,926 individuals reveals lipid loci stratified by sleep duration Nat. Commun. 2019 10 5121 10.1038/s41467-019-12958-0 31719535
+39. Teslovich TM Biological, clinical and population relevance of 95 loci for blood lipids Nature 2010 466 707 713 10.1038/nature09270 20686565
+40. Kerr TA Loss of nuclear receptor SHP impairs but does not eliminate negative feedback regulation of bile acid synthesis Dev. Cell 2002 2 713 720 10.1016/S1534-5807(02)00154-5 12062084
+41. Wang L Redundant pathways for negative feedback regulation of bile acid production Dev. Cell 2002 2 721 731 10.1016/S1534-5807(02)00187-9 12062085
+42. Hartman HB Lai K Evans MJ Loss of small heterodimer partner expression in the liver protects against dyslipidemia J. Lipid Res. 2009 50 193 203 10.1194/jlr.M800323-JLR200 18820241
+43. Nishigori H Mutations in the small heterodimer partner gene are associated with mild obesity in Japanese subjects Proc. Natl Acad. Sci. USA 2001 98 575 580 10.1073/pnas.98.2.575 11136233
+44. Willer C Discovery and refinement of loci associated with lipid levels Nat. Genet. 2013 45 1274 1283 10.1038/ng.2797 24097068
+45. Brown S High-throughput mouse phenomics for characterizing mammalian gene function Nat. Rev. Genet. 2018 19 357 370 10.1038/s41576-018-0005-2 29626206
+46. Bult C Mouse Genome Database (MGD) 2019 Nucleic Acids Res. 2019 47 D801 D806 10.1093/nar/gky1056 30407599
+47. Blair DR A nondegenerate code of deleterious variants in Mendelian loci contributes to complex disease risk Cell 2013 155 70 80 10.1016/j.cell.2013.08.030 24074861
+48. Freund MK Phenotype-specific enrichment of Mendelian disorder genes near GWAS regions across 62 complex traits Am. J. Hum. Genet. 2018 103 535 552 10.1016/j.ajhg.2018.08.017 30290150
+49. Amberger J Bocchini C Scott A Hamosh A OMIM.org: leveraging knowledge across phenotype-gene relationships Nucleic Acids Res. 2019 47 D1038 D1043 10.1093/nar/gky1151 30445645
+50. Bruning PF Insulin resistance and breast-cancer risk Int. J. Cancer 1992 52 511 516 10.1002/ijc.2910520402 1399128
+51. Plenge R Scolnick E Altshuler D Validating therapeutic targets through human genetics Nat. Rev. Drug Discov. 2013 12 581 594 10.1038/nrd4051 23868113
+52. Wang Y Therapeutic Target Database 2020: enriched resource for facilitating research and early development of targeted therapeutics Nucleic Acids Res. 2020 48 D1031 D1041 31691823
+53. Sanseau P Use of genome-wide association studies for drug repositioning Nat. Biotechnol. 2012 30 317 320 10.1038/nbt.2151 22491277
+54. Lieschke G Mice lacking granulocyte colony-stimulating factor have chronic neutropenia, granulocyte and macrophage progenitor cell deficiency, and impaired neutrophil mobilization Blood 1994 84 1737 1746 10.1182/blood.V84.6.1737.1737 7521686
+55. Astle WJ The allelic landscape of human blood cell trait variation and links to common complex disease Cell 2016 167 1415 1429 10.1016/j.cell.2016.10.042 27863252
+56. Barrett A Sloand E Autoimmune mechanisms in the pathophysiology of myelodysplastic syndromes and their clinical relevance Haematologica 2009 94 449 451 10.3324/haematol.2009.006080 19336747
+57. Schaid D Chen W Larson N From genome-wide associations to candidate causal variants by statistical fine-mapping Nat. Rev. Genet. 2018 19 491 504 10.1038/s41576-018-0016-z 29844615
+58. Võsa, U. et al. Unraveling the polygenic architecture of complex traits using blood eQTL meta-analysis. Preprint at 10.1101/447367 (2018).
+59. Zhang Y Model-based analysis of ChIP-Seq (MACS) Genome Biol. 2008 9 R137 10.1186/gb-2008-9-9-r137 18798982
+60. Heinz S Simple combinations of lineage-determining transcription factors prime cis-regulatory elements required for macrophage and B cell identities Mol. Cell 2010 38 576 589 10.1016/j.molcel.2010.05.004 20513432
+
